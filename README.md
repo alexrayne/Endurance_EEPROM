@@ -12,7 +12,7 @@ i think a good library is written by nasa EEFS? i guess ..
 
 
 `24LC64`
-•  Page Write Time 5 ms, max.
-•  32-Byte Page Write Buffer
-•  More than 1 Million Erase/Write Cycles
-•  I2C address: 0x50
+*  Page Write Time 5 ms, max.
+*  32-Byte Page Write Buffer
+*  More than 1 Million Erase/Write Cycles
+*  I2C address: 0x50
