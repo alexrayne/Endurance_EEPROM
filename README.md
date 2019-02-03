@@ -27,4 +27,5 @@ but i think its not for what im planning for...
 ```
 [                      EEPROM Available Space is 8KB                                  ]
 [Page 1 32 byte][Page 2 32 byte][                                     ][Page n 32 byte]
+[struct 1 log page n bytes][struct 2 log page n bytes][    ][struct n log page n bytes]
 ```
