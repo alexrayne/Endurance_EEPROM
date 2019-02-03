@@ -21,3 +21,10 @@ but i think its not for what im planning for...
 *  32-Byte Page Write Buffer
 *  More than 1 Million Erase/Write Cycles
 *  I2C address: 0x50
+
+
+## methodology:
+```
+[                      EEPROM Available Space is 8KB                                  ]
+[Page 1 32 byte][Page 2 32 byte][                                     ][Page n 32 byte]
+```
