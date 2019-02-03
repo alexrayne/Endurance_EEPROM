@@ -8,10 +8,12 @@ i have no experience with EEPROM but this is how i attmept to make a library tha
 
 its not file system so just page writing data with pointer of the data.. :)
 
-i think a good library is written by nasa EEFS? i guess .. 
+i think a good library is written by [nasa EEFS](https://github.com/nasa/eefs)?
+but i think its not for what im planning for...
 
 
-`24LC64`
+### 24LC64 specs:
+*  64Kbit = 8Kbyte = 250 Write Page
 *  Page Write Time 5 ms, max.
 *  32-Byte Page Write Buffer
 *  More than 1 Million Erase/Write Cycles
