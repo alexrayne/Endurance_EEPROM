@@ -2,7 +2,7 @@
 a try implement an endurance way to save log data in eeprom, going to use it for 24LC64 
 
 ## Methodology:
-http://ww1.microchip.com/downloads/en/AppNotes/doc2526.pdf
+
 
 i have no experience with EEPROM but this is how i attmept to make a library that should have wear leveling and safe to write logging into eeprom. 
 
@@ -12,7 +12,7 @@ i think a good library is written by [nasa EEFS](https://github.com/nasa/eefs)?
 but i think its not for what im planning for...
 
 
-### 24LC64 specs:
+### [24LC64](http://ww1.microchip.com/downloads/en/AppNotes/doc2526.pdf) specs:
 *  64Kbit = 8Kbyte = 250 Write Page
 *  Page Write Time 5 ms, max.
 *  32-Byte Page Write Buffer
