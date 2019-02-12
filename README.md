@@ -49,7 +49,8 @@ every time you write data into your slot. im adding header bytes to your data:
 - CRC: checksum to prevent fail data and restore last correct written data.
 
 ### simulation:
-running the code in pc while developing the library
+running the code in pc while developing the library.
+
 ![img](Test_simulation/eels_simulation.gif)
 
 #### example:
