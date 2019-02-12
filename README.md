@@ -47,7 +47,11 @@ defining slot size depending on:
 every time you write data into your slot. im adding header bytes to your data:
 - counter unsigned integer: * to identify the last data inserted in the slot.
 - CRC: checksum to prevent fail data and restore last correct written data.
-      
+
+### simulation:
+running the code in pc while developing the library
+![img](Test_simulation/eels_simulation.gif)
+
 #### example:
 - a 23 byte struct
 - the user assign a slot to have full eeprom size (8K)
