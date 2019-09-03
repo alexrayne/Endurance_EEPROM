@@ -17,6 +17,18 @@ i think a good EEPROM fs library is written by [nasa EEFS](https://github.com/na
 
 
 ### [24LC64](http://ww1.microchip.com/downloads/en/DeviceDoc/21189T.pdf) specs:
+it doesnt matter which chip, im emulating EEPROM in PC, or the flash inside MCU or an EEPROM chip.
+however the library should be passed functions to read and write from the Non-volatile memory:
+
+```
+//out of library scope:
+//int32_t ROM_Read(uint32_t addr, uint8_t* const buf, uint16_t length);
+//int32_t ROM_Write(uint32_t addr, uint8_t* const buf, uint16_t length);
+
+EELS_Init(&ROM_Read,&ROM_Write);
+
+```
+
 *  64Kbit = 8Kbyte = 250 Write Page
 *  Page Write Time 5 ms, max.
 *  32-Byte Page Write Buffer
