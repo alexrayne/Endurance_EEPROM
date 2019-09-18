@@ -1,4 +1,6 @@
-SRC = main.c FlashMem.c EELS.c unity\unity.c app\communication\crc32.c
+SRC = main.c FlashMem.c unity\unity.c app\communication\crc32.c
+SRC += ..\src\EELS.c
+
 OBJ = main.o FlashMem.o EELS.o unity.o crc32.o
 ODIR = .\build
 Define = -D bool=_Bool -D FSIZE=0x40000 -D UNITY_OUTPUT_COLOR
