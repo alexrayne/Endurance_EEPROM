@@ -1,21 +1,22 @@
 SRC = main.c FlashMem.c EELS.c unity\unity.c app\communication\crc32.c
 OBJ = main.o FlashMem.o EELS.o unity.o crc32.o
 ODIR = .\build
-Define = -D bool=_Bool -D FSIZE=0x40000
+Define = -D bool=_Bool -D FSIZE=0x40000 -D UNITY_OUTPUT_COLOR
 INC = -I"unity"
 
 
 ARGS= $(Define) $(INC) -std=c99
 
-compile: clean $(OBJ)
+run: clean $(OBJ)
 	gcc -o $(ODIR)\test.exe $(OBJ) $(ARGS)
 	cls
 	$(ODIR)\test.exe
 
-buildonly: clean $(OBJ)
+build: clean $(OBJ)
 	gcc -o $(ODIR)\test.exe $(OBJ) $(ARGS)
 
-testonly: $(ODIR)\test.exe
+test: $(ODIR)\test.exe
+	cls
 	$(ODIR)\test.exe
 
 

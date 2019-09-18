@@ -3,12 +3,14 @@
  *
  * Created: 7/24/2019 12:10:27 PM
  *  Author: hasan.jaafar
- */ 
- 
+ */
+
 
 
 //#include "hal_flash.h"
 #include "App/communication/crc32.h"
+#include <limits.h>
+
 /*
 	page_size = flash_get_page_size(&FLASH_0);
 
@@ -25,7 +27,7 @@
 #define EELS_H_
 
 
-#define EELS_MAX_SLOTS 5
+
 #define _EELS_CRC_BYTE_LENGTH 1
 
 
@@ -41,18 +43,22 @@ typedef struct {
 }ee_slot_t;
 
 // public functions
-uint8_t EELS_Init(int32_t (*readFunc)(uint32_t, uint8_t* const, uint16_t), int32_t (*writeFunc)(uint32_t,uint8_t* const, uint16_t));
+uint8_t EELS_Init();
 void EELS_InsertLog(uint8_t slotNumber, uint8_t* data);
 uint8_t EELS_SetSlot(uint8_t slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length);
 
 //private functions
 int32_t _EELS_FindLastPos(uint8_t slotNumber);
 bool EELS_ReadLast(uint8_t slotNumber, uint8_t* const buf);
+uint16_t _EELS_getHealthyLogs(uint8_t slotNumber);
+uint16_t _EELS_getHealthySequence(uint8_t slotNumber);
 
 // dbg functions
 uint8_t EELS_SlotLogSize(uint8_t slotNumber);
 uint32_t EELS_SlotBegin(uint8_t slotNumber);
 uint32_t EELS_SlotEnd(uint8_t slotNumber);
+uint8_t EELS_ReadCell(uint32_t position);
+void EELS_WriteCell(uint32_t position, uint8_t val);
 
-#endif 
-/* EELS_H_ */ 
+#endif
+/* EELS_H_ */
