@@ -8,8 +8,8 @@
 
 
 //#include "hal_flash.h"
-#include "App/communication/crc32.h"
 #include <limits.h>
+#include <stdint.h>
 
 /*
 	page_size = flash_get_page_size(&FLASH_0);
@@ -59,6 +59,10 @@ uint32_t EELS_SlotBegin(uint8_t slotNumber);
 uint32_t EELS_SlotEnd(uint8_t slotNumber);
 uint8_t EELS_ReadCell(uint32_t position);
 void EELS_WriteCell(uint32_t position, uint8_t val);
+
+
+
+
 
 #endif
 /* EELS_H_ */

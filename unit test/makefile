@@ -1,10 +1,11 @@
-SRC = main.c FlashMem.c unity\unity.c app\communication\crc32.c
+SRC = main.c FlashMem.c unity\unity.c
 SRC += ..\src\EELS.c
 
-OBJ = main.o FlashMem.o EELS.o unity.o crc32.o
+OBJ = main.o FlashMem.o EELS.o unity.o
 ODIR = .\build
 Define = -D bool=_Bool -D FSIZE=0x40000 -D UNITY_OUTPUT_COLOR
-INC = -I"unity"
+
+INC = -I"unity" -I"..\src" -I"."
 
 
 ARGS= $(Define) $(INC) -std=c99

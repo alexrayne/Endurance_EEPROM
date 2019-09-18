@@ -1,11 +1,12 @@
 
-#include "stdio.h"
-#include "unity.h"
-
-#include "FlashMem.h"
-
+#include <stdio.h>
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
+
+#include "unity.h"
+
+#include "EELS.h"
+#include "FlashMem.h"
 
 #define CAT(a, b, c) PCAT(a, b, c)
 #define PCAT(a,b,c) a##b##c
@@ -48,7 +49,7 @@ void EELS_init_test(){
 	printf("\e[30m\e[93m========= init test ========== \e[0m\n");
 	SLOT_UT_STRUCT last_cfg;
 	//struct config_struct last_cfg;
-	EELS_Init(&ROM_Read,&ROM_Write);
+	EELS_Init();
 	EELS_SetSlot(SLOT_UT, SLOT_UT_BEGIN, SLOT_UT_LENGTH, SLOT_UT_DATALENGTH);
 	//#define NVMCTRL_FLASH_SIZE          262144
 	//NVMCTRL_ROW_SIZE            256

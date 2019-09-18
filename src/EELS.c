@@ -4,10 +4,10 @@
  * Created: 7/24/2019 11:58:42 AM
  *  Author: hasan.jaafar
  */
-
+#include "EELS_Conf.h"
 #include "EELS.h"
 #include <math.h>
-#include "EELS_Conf.h"
+
 
 uint32_t _EELS_ReadAddr(uint8_t slotNumber, uint32_t addr);
 
@@ -73,7 +73,7 @@ void EELS_InsertLog(uint8_t slotNumber, uint8_t* data) {
 	char char_cnt[4] = { (char)(cnt), (char)(cnt >> 8), (char)(cnt >> 16), (char)(cnt >> 24) };
 	EELS_EEPROM_WRITE(mypos, (uint8_t*)char_cnt, _slot_arr[slotNumber]._counter_bytes);
 	mypos += _slot_arr[slotNumber]._counter_bytes;
-	uint8_t mycrc = xcrc8(data, _slot_arr[slotNumber].raw_data_size);
+	uint8_t mycrc = EELS_CRC8(data, _slot_arr[slotNumber].raw_data_size);
 	EELS_EEPROM_WRITE(mypos, (uint8_t*)(&mycrc), _EELS_CRC_BYTE_LENGTH);
 	mypos += _EELS_CRC_BYTE_LENGTH;
 	EELS_EEPROM_WRITE(mypos, data,_slot_arr[slotNumber].raw_data_size);
@@ -98,7 +98,7 @@ bool EELS_ReadLast(uint8_t slotNumber, uint8_t* const buf){
 		EELS_EEPROM_READ(_slot_arr[slotNumber].current_position + _slot_arr[slotNumber]._counter_bytes + _EELS_CRC_BYTE_LENGTH ,
 								buf,
 								_slot_arr[slotNumber].raw_data_size);
-		uint8_t calculatedCrc = xcrc8(buf,_slot_arr[slotNumber].raw_data_size);
+		uint8_t calculatedCrc = EELS_CRC8(buf,_slot_arr[slotNumber].raw_data_size);
 	#endif
 	return slotcrc == calculatedCrc;
 }
@@ -110,6 +110,28 @@ bool EELS_ReadLast(uint8_t slotNumber, uint8_t* const buf){
 /* ==================================================================== */
 /* 						PRIVATE FUNCTIONS 								*/
 /* ==================================================================== */
+
+#if EELS_LOCAL_CRC_FN
+
+uint8_t EELS_crc8(uint8_t *data, uint8_t len)
+{
+	uint8_t crc = 0xff;
+	uint8_t i, j;
+	for (i = 0; i < len; i++) {
+		crc ^= data[i];
+		for (j = 0; j < 8; j++) {
+			if ((crc & 0x80) != 0)
+			crc = (uint8_t)((crc << 1) ^ 0x31);
+			else
+			crc <<= 1;
+		}
+	}
+	return crc;
+}
+
+#endif
+
+
 
 uint32_t _EELS_ReadAddr(uint8_t slotNumber, uint32_t addr)
 {
@@ -171,7 +193,7 @@ uint16_t _EELS_getHealthyLogs(uint8_t slotNumber){
 			EELS_EEPROM_READ(i + _slot_arr[slotNumber]._counter_bytes + _EELS_CRC_BYTE_LENGTH ,
 									buf,
 									_slot_arr[slotNumber].raw_data_size);
-			uint8_t calculatedCrc = xcrc8(buf,_slot_arr[slotNumber].raw_data_size);
+			uint8_t calculatedCrc = EELS_CRC8(buf,_slot_arr[slotNumber].raw_data_size);
 			if (calculatedCrc == LogCRC)
 				healthyLogs++;
 			else
