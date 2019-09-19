@@ -1,6 +1,7 @@
 # Endurance_EEPROM
-a try implement an endurance way to save log data in eeprom, going to use it for 24LC64
-i have no experience with EEPROM but this is how i attmept to make a library that should have wear leveling and safe to write logging into eeprom using circle buffer and variable to track log sequence.
+
+i try to implement a way to save logs in non-volatile memory. this library tries to save user logs into circular buffer area which i call (slots).  
+this library supports to have different slots to give user feature of saving with various update rates.
 
 
 
@@ -11,12 +12,12 @@ i have no experience with EEPROM but this is how i attmept to make a library tha
 [Header + S1_log(1)][...][Header+ S1_log(n)] [...] [Header+ Sn_log(n)][ ... ][Header + Sn_log(x)]
 ```
 
-the user divide the eeprom into SLOTS which will have the o-ring written into it.
+the user divide the memory into SLOTS which will have the o-ring written into it.
 
 ### what is `[slot]`:
 
-its like dividing the eeprom to different areas of log. maybe you will have struct data that is written every 10 minute and another that is written every 2 days. its waste to write them both in the same struct. so we define 2 slots one for slow update rate struct and the other for the fast update rate.
-the slot that contains high rate of writes should be larger to increase the indurance of the EEPROM.
+its like dividing the memory to different areas of log. maybe you will have struct data that is written every 10 minute and another that is written every 2 days. its waste to write them both in the same struct. so we define 2 slots one for slow update rate struct and the other for the fast update rate.
+the slot that contains high rate of writes should be larger to increase the endurance of the EEPROM.
 
 remember, this is not variable updating, all the data are logs, and you can access last n structs.
 defining slot size depending on:
