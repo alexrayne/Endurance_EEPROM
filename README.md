@@ -1,39 +1,7 @@
 # Endurance_EEPROM
-a try implement an endurance way to save log data in eeprom, going to use it for 24LC64 
-i have no experience with EEPROM but this is how i attmept to make a library that should have wear leveling and safe to write logging into eeprom. 
+a try implement an endurance way to save log data in eeprom, going to use it for 24LC64
+i have no experience with EEPROM but this is how i attmept to make a library that should have wear leveling and safe to write logging into eeprom using circle buffer and variable to track log sequence.
 
-its not a file system :)
-
-i think a good EEPROM fs library is written by [nasa EEFS](https://github.com/nasa/eefs)?
-
-
-## Links to read:
-
-1- [AVR101: High Endurance EEPROM Storage](http://ww1.microchip.com/downloads/en/AppNotes/doc2526.pdf)\
-2- [EEPROM Reliability and Wear Leveling](http://www.mosaic-industries.com/embedded-systems/sbc-single-board-computers/freescale-hcs12-9s12-c-language/instrument-control/eeprom-lifetime-reliability-wear-leveling)\
-3- [stack-exchange wear leveling](https://electronics.stackexchange.com/questions/60342/wear-leveling-on-a-microcontrollers-eeprom)\
-
-
-
-
-### [24LC64](http://ww1.microchip.com/downloads/en/DeviceDoc/21189T.pdf) specs:
-it doesnt matter which chip, im emulating EEPROM in PC, or the flash inside MCU or an EEPROM chip.
-however the library should be passed functions to read and write from the Non-volatile memory:
-
-```
-//out of library scope:
-//int32_t ROM_Read(uint32_t addr, uint8_t* const buf, uint16_t length);
-//int32_t ROM_Write(uint32_t addr, uint8_t* const buf, uint16_t length);
-
-EELS_Init(&ROM_Read,&ROM_Write);
-
-```
-
-*  64Kbit = 8Kbyte = 250 Write Page
-*  Page Write Time 5 ms, max.
-*  32-Byte Page Write Buffer
-*  More than 1 Million Erase/Write Cycles
-*  I2C address: 0x50
 
 
 ## methodology:
@@ -71,11 +39,11 @@ running the code in pc while developing the library.
 - \+ 1 byte for crc8
 - \+ n byte for counter
 with 8K/25 byte data, we can have less than 320 data points in the slot.
-so our counting integer should have bandwidth of counting to 321. 
+so our counting integer should have bandwidth of counting to 321.
 - hence we need [9bits] for counter or [2 bytes]
 - total data size = 26 bytes, counting = 308
 
-    
+
 #### eeprom data example:
 * what is the header of the data.\
 `header: [counting byte][crc8]`
@@ -90,4 +58,42 @@ so our counting integer should have bandwidth of counting to 321.
 ` [[308][crc8][struct 23 byte]] [[ 1 ][crc8][struct 23 byte]] [[ 3 ][crc8][struct 23 byte]] ... `
 
 #### detect last data:
-...
+the library writes the counter variable in sequence, once it reaches highest counter. it restart from 1 again. although highest number in the counter is actually bigger than the logs that are written in the slot.
+
+hence:
+slot that containts 4 logs:  
+` [[1][crc8][log]] [[2][crc8][log]] [[3][crc8][log]] [[4][crc8][log]] `  
+after inserting the 5th log. it will be overwritten to the oldest log:  
+` [[5][crc8][log]] [[2][crc8][log]] [[3][crc8][log]] [[4][crc8][log]] `  
+as you can see above, we have 5 is the max counter (even though we are limited to 4 max logs). this will break the sequence and we can track the latest log.
+
+
+
+
+
+
+
+### EEPROM Interface:
+it doesnt matter which chip, im emulating EEPROM in PC, or the flash inside MCU or an EEPROM chip.
+however the library should be passed functions to read and write from the Non-volatile memory:
+
+`EELS_Conf.h` constains the function Interface
+
+```c++
+/* Include the eeprom functions file here: */
+#include "FlashMem.h"
+/* DEFINE EEPROM FUNCTIONS HERE: */
+#define EELS_EEPROM_READ(addr,buf,length) ROM_Read(addr,buf,length)
+#define EELS_EEPROM_WRITE(addr,buf,length) ROM_Write(addr,buf,length)
+```
+
+
+
+
+
+
+## Links to read:
+
+1- [AVR101: High Endurance EEPROM Storage](http://ww1.microchip.com/downloads/en/AppNotes/doc2526.pdf)\
+2- [EEPROM Reliability and Wear Leveling](http://www.mosaic-industries.com/embedded-systems/sbc-single-board-computers/freescale-hcs12-9s12-c-language/instrument-control/eeprom-lifetime-reliability-wear-leveling)\
+3- [stack-exchange wear leveling](https://electronics.stackexchange.com/questions/60342/wear-leveling-on-a-microcontrollers-eeprom)\

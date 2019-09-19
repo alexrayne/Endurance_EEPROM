@@ -46,7 +46,7 @@ struct slot_1_wte{
 
 
 void EELS_init_test(){
-	printf("\e[30m\e[93m========= init test ========== \e[0m\n");
+	printf("\e[30m\e[31m========= init test ========== \e[0m\n");
 	SLOT_UT_STRUCT last_cfg;
 	//struct config_struct last_cfg;
 	EELS_Init();
