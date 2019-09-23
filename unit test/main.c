@@ -53,12 +53,12 @@ void EELS_init_test(){
 	EELS_SetSlot(SLOT_UT, SLOT_UT_BEGIN, SLOT_UT_LENGTH, SLOT_UT_DATALENGTH);
 	//#define NVMCTRL_FLASH_SIZE          262144
 	//NVMCTRL_ROW_SIZE            256
-	if (EELS_ReadLast(SLOT_UT,(uint8_t*)&last_cfg)){
-		printf("EELS_ReadLast: %d\n",EELS_ReadLast(SLOT_UT,(uint8_t*)&last_cfg));
+	if (EELS_ReadFromEnd(SLOT_UT,0,(uint8_t*)&last_cfg)){
+		printf("EELS_Readfromend(0): %d\n",EELS_ReadFromEnd(SLOT_UT,0,(uint8_t*)&last_cfg));
 	}
 
 	TEST_ASSERT_EQUAL_INT (10 , SLOT_UT_DATALENGTH);
-	TEST_ASSERT_TRUE_MESSAGE(  EELS_ReadLast(SLOT_UT,(uint8_t*)&last_cfg), "last log read didnt match." );
+	TEST_ASSERT_TRUE_MESSAGE( EELS_ReadFromEnd(SLOT_UT,0,(uint8_t*)&last_cfg), "last log read didnt match." );
 
 	printf("\tLOG_begin:0x%.8X\n",EELS_SlotBegin(SLOT_UT) );
 	printf("\tLOG_size:%d\n",EELS_SlotLogSize(SLOT_UT) );
@@ -72,11 +72,14 @@ void EELS_Insert_test(){
 
 	uint32_t last_pos = _EELS_FindLastPos(SLOT_UT);
 	uint32_t expected_pos = last_pos;
-	last_cfg.vt_timing_buffer[0] = 0xef;
+	last_cfg.vt_timing_buffer[0] = 0x0d;
+	last_cfg.vt_timing_buffer[1] = 0xf0;
+	last_cfg.vt_timing_buffer[2] = 0xbe;
+	last_cfg.vt_timing_buffer[3] = 0xba;
 	clock_t begin = clock();
 	for (int i=0 ; i<EELS_INSERT_COUNT; i++){
 		if ((double)(clock() - begin) / CLOCKS_PER_SEC > 0.3 ||  i == EELS_INSERT_COUNT - 1 ){
-			printf("\b%c[2K\r[%d/%d]", 27, i+1,EELS_INSERT_COUNT ); //progress bar
+			printf("\b%c[2K\r[%d/%d]", 27, i+1, EELS_INSERT_COUNT ); //progress bar
 			fflush(stdout);
 			begin = clock();
 		}
@@ -92,12 +95,33 @@ void EELS_Insert_test(){
 	printf("\n");
 }
 
+
+
+
+void EELS_readlogSeq_test(){
+	printf("\e[30m\e[93m========= eels read sequences ========== \e[0m\n");
+	uint16_t max_logs = (EELS_SlotEnd(SLOT_UT) - EELS_SlotBegin(SLOT_UT)) / EELS_SlotLogSize(SLOT_UT);
+	printf("\t max_logs=%u \n",max_logs);
+	SLOT_UT_STRUCT w_cfg, read_cfg;
+
+	for (uint16_t j=0; j<max_logs; j++){
+			memset(&w_cfg, j % 255 , SLOT_UT_DATALENGTH);
+			EELS_InsertLog(SLOT_UT,(uint8_t*) &w_cfg);
+	}
+
+	for (uint16_t j=0; j<max_logs; j++){
+		bool x = EELS_ReadFromEnd(SLOT_UT, max_logs - (j+1) , (uint8_t*)&read_cfg);
+		TEST_ASSERT_EQUAL_INT( j % 255 , *(uint8_t*)&read_cfg);
+	}
+
+}
+
+
 void EELS_readwrite_compare(){
 	#define EELS_READWRITE_COUNT 10000
 	/* initialize random seed: */
 	srand (time(NULL));
-	printf("");
-		printf("\e[30m\e[93m========= eels read write compare ========== \e[0m\n");
+	printf("\e[30m\e[93m========= eels read write compare ========== \e[0m\n");
 	SLOT_UT_STRUCT last_cfg, read_cfg;
 	clock_t begin = clock();
 	for (int j=0; j<EELS_READWRITE_COUNT; j++){
@@ -119,10 +143,12 @@ void EELS_readwrite_compare(){
 			*(uint8_t*) &last_cfg += 1;
 		}
 
-		EELS_ReadLast(SLOT_UT, (uint8_t*)&read_cfg);
+		EELS_ReadFromEnd(SLOT_UT,0, (uint8_t*)&read_cfg);
 		int memcmpR = memcmp(&read_cfg, &last_cfg,  sizeof(last_cfg));
 		if( memcmpR != 0 && rand_var != 9876){
 			printf("error in readwritecompare [%d]\n", j);
+			printf("\t last_cfg: 0x[%X]\n", *(uint32_t*) &last_cfg);
+			printf("\t read_cfg 0x[%X]\n", *(uint32_t*) &read_cfg);
 			TEST_ASSERT_EQUAL_INT(memcmpR, 0 );
 		}
 	}
@@ -178,6 +204,7 @@ int main(){
 		RUN_TEST(EELS_Insert_test);
 		RUN_TEST(EELS_readwrite_compare);
 		RUN_TEST(EELS_LogHealth_test);
+		RUN_TEST(EELS_readlogSeq_test);
 		//printf("slotB:%d \t slotE:%d \t slotLL:%d \t Healthy:%d\n", EELS_SlotBegin(SLOT_0) , EELS_SlotEnd(SLOT_0) , EELS_SlotLogSize(SLOT_0) , _EELS_getHealthyLogs(SLOT_0));
 	ROM_Commit();
 	//getchar();

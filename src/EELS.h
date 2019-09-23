@@ -26,10 +26,9 @@
 #ifndef EELS_H_
 #define EELS_H_
 
-
-
+//perhapbs this is not for configuration but to remind you about CRC byte:
+//currently i only support CRC8
 #define _EELS_CRC_BYTE_LENGTH 1
-
 
 typedef struct {
 	uint32_t begining;
@@ -42,16 +41,18 @@ typedef struct {
 	uint8_t _counter_bytes;
 }ee_slot_t;
 
+
 // public functions
 uint8_t EELS_Init();
 void EELS_InsertLog(uint8_t slotNumber, uint8_t* data);
 uint8_t EELS_SetSlot(uint8_t slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length);
-
-//private functions
-int32_t _EELS_FindLastPos(uint8_t slotNumber);
+bool EELS_ReadFromEnd(uint8_t slotNumber, uint16_t log_num , uint8_t* const buf );
 bool EELS_ReadLast(uint8_t slotNumber, uint8_t* const buf);
+//private functions
+uint32_t _EELS_FindLastPos(uint8_t slotNumber);
 uint16_t _EELS_getHealthyLogs(uint8_t slotNumber);
 uint16_t _EELS_getHealthySequence(uint8_t slotNumber);
+bool _EELS_ReadLog(uint8_t slotNumber, uint32_t log_start_position, uint8_t* const buf);
 
 // dbg functions
 uint8_t EELS_SlotLogSize(uint8_t slotNumber);
@@ -59,10 +60,6 @@ uint32_t EELS_SlotBegin(uint8_t slotNumber);
 uint32_t EELS_SlotEnd(uint8_t slotNumber);
 uint8_t EELS_ReadCell(uint32_t position);
 void EELS_WriteCell(uint32_t position, uint8_t val);
-
-
-
-
 
 #endif
 /* EELS_H_ */
