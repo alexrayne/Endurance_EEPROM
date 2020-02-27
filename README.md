@@ -1,8 +1,11 @@
 # Endurance_EEPROM
 
-i try to implement a way to save logs in non-volatile memory. this library tries to save user logs into circular buffer area which i call (slots).  
+im trying to implement a way to save log data in non-volative memory with Log-structured file system.
+
+this library tries to save user logs into circular buffer area which i call (slots).  
 this library supports to have different slots to give user feature of saving with various update rates.
 
+the slot header consist of (sequential number + CRC code) to provide **power loss resilience?**
 
 
 ## methodology:
