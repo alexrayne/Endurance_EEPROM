@@ -32,10 +32,10 @@ typedef EELSHandle  EELSh;
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                          public functions
 uint8_t EELS_Init();
-void    EELS_InsertLog  (EELSh slotNumber, uint8_t* data);
+void    EELS_InsertLog  (EELSh slotNumber, const void* data);
 uint8_t EELS_SetSlot    (EELSh slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length);
-bool    EELS_ReadFromEnd(EELSh slotNumber, uint16_t log_num , uint8_t* const buf );
-bool    EELS_ReadLast   (EELSh slotNumber, uint8_t* const buf);
+bool    EELS_ReadFromEnd(EELSh slotNumber, uint16_t log_num , void* const buf );
+bool    EELS_ReadLast   (EELSh slotNumber, void* const buf);
 
 
 
@@ -62,7 +62,7 @@ EELSlot_t*  EELSlot         (EELSh slotNumber){
 uint32_t _EELS_FindLastPos  (EELSh slotNumber);
 uint16_t _EELS_getHealthyLogs(EELSh slotNumber);
 uint16_t _EELS_getHealthySequence(EELSh slotNumber);
-bool     _EELS_ReadLog      (EELSh slotNumber, uint32_t log_start_position, uint8_t* const buf);
+bool     _EELS_ReadLog      (EELSh slotNumber, uint32_t log_start_position, void* const buf);
 
 uint8_t EELS_crc8(const void *data, uint8_t len);
 

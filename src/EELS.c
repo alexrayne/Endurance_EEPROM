@@ -57,13 +57,14 @@ uint8_t EELS_SetSlot(EELSh slotNumber, uint32_t begin_addr, uint16_t length, uin
 }
 
 
-void EELS_InsertLog(EELSh slotNumber, uint8_t* data) {
+void EELS_InsertLog(EELSh slotNumber, const void* src) {
 
 	#if (__EELS_DBG__)
 	_EELS_FindLastPos(slotNumber);
 	#endif
 
     EELSlot_t*  this = EELSlot(slotNumber);
+    const uint8_t* data = (const uint8_t*)src;
 
 	uint32_t cnt    = this->current_counter;
 	uint32_t mypos  = this->current_position;
@@ -83,9 +84,11 @@ void EELS_InsertLog(EELSh slotNumber, uint8_t* data) {
 	char char_cnt[4] = { (char)(cnt), (char)(cnt >> 8), (char)(cnt >> 16), (char)(cnt >> 24) };
 	EELS_EEPROM_WRITE(mypos, (uint8_t*)char_cnt, this->_counter_bytes);
 	mypos += this->_counter_bytes;
+
 	uint8_t mycrc = EELS_CRC8(data, this->raw_data_size);
 	EELS_EEPROM_WRITE(mypos, (uint8_t*)(&mycrc), _EELS_CRC_BYTE_LENGTH);
 	mypos += _EELS_CRC_BYTE_LENGTH;
+
 	EELS_EEPROM_WRITE(mypos, data, this->raw_data_size);
 	mypos += this->raw_data_size;
 
@@ -98,7 +101,7 @@ void EELS_InsertLog(EELSh slotNumber, uint8_t* data) {
 }
 
 
-bool EELS_ReadLast(EELSh slotNumber, uint8_t* const buf){
+bool EELS_ReadLast(EELSh slotNumber, void* const buf){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 	#if (__EELS_DBG__)
 	_EELS_FindLastPos(slotNumber);
@@ -112,8 +115,9 @@ bool EELS_ReadLast(EELSh slotNumber, uint8_t* const buf){
 
 
 /*under development*/
-bool EELS_ReadFromEnd(EELSh slotNumber, uint16_t log_num , uint8_t* const buf ){
+bool EELS_ReadFromEnd(EELSh slotNumber, uint16_t log_num , void* const dst ){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
+    uint8_t* buf = (uint8_t*)dst;
 
     if (log_num >= this->_counter_max){ //cant read > slot size
 		return 0;
@@ -172,8 +176,9 @@ uint8_t EELS_crc8(const void *src, uint8_t len)
 
 
 
-bool _EELS_ReadLog(EELSh slotNumber, uint32_t log_start_position, uint8_t* const buf){
+bool _EELS_ReadLog(EELSh slotNumber, uint32_t log_start_position, void* const dst){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
+    uint8_t* buf = (uint8_t*)dst;
 
     uint8_t slotcrc=  0 ;
 	EELS_EEPROM_READ(log_start_position + this->_counter_bytes ,
@@ -213,8 +218,8 @@ uint32_t _EELS_FindLastPos(EELSh slotNumber) {
 	uint32_t tmp_cnt = 0;
 
 	for (uint32_t i=(S_begin+ SL); i<(S_begin + length); i+=SL) {
-		if (i + SL > S_begin+length)
-		continue;
+		if (i + SL > S_begin+length)   break;
+
 		tmp_cnt = _EELS_ReadCounter(slotNumber, i); //read the address
 
 		if (tmp_cnt == cnt + 1){// if (current = previous +1)
