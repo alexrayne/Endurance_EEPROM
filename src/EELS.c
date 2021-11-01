@@ -36,7 +36,7 @@ enum {
 };
 
 
-uint8_t EELS_SetSlot(EELSh slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length) {
+uint8_t EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, uint8_t data_length) {
 	if (slotNumber >= EELS_APP_SLOTS)
 		return 1; //out of boundary!
 
@@ -70,9 +70,9 @@ int EELS_InsertLog(EELSh slotNumber, const void* src) {
     EELSlot_t*  this = EELSlot(slotNumber);
     const uint8_t* data = (const uint8_t*)src;
 
-	uint32_t cnt    = this->current_counter;
-	uint32_t mypos  = this->current_position;
-	uint32_t S_begin= this->begining;
+    EELSlotLen cnt    = this->current_counter;
+	EELSAddr mypos  = this->current_position;
+	EELSAddr S_begin= this->begining;
 
 	//-------- instead of this: lets make proper last pos identifier:
 	if (!(this->current_position == S_begin && this->current_counter == 0)) // put description of this situation...
@@ -137,7 +137,7 @@ uint32_t    eels_index_pos(EELSlot_t*  this, int idx){
     }
     // TODO: check actual slot fill size
 
-    uint32_t now_counter   = this->current_counter;
+    int now_counter   = this->current_counter;
     idx += now_counter;
     if (idx >= this->_counter_max)
         idx -= this->_counter_max;
@@ -171,7 +171,7 @@ bool    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const dst){
 /* 						PRIVATE FUNCTIONS 								*/
 /* ==================================================================== */
 
-uint8_t EELS_crc8(const void *src, uint8_t len)
+uint8_t EELS_crc8(const void *src, EELSDataLen len)
 {
     const uint8_t* data = (const uint8_t*)src;
 
@@ -218,12 +218,12 @@ EELSEpoch _EELS_ReadCounter(EELSh slotNumber, uint32_t addr)
 uint32_t _EELS_FindLastPos(EELSh slotNumber) {
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 
-    uint16_t _counter_max   = this->_counter_max; //don't use 0s. although the EEPROM comes with 0xff filled
-	uint16_t SL             = this->slot_log_length;
-	uint32_t S_begin        = this->begining;
-	uint16_t length         = this->length;
+    EELSlotLen  _counter_max   = this->_counter_max; //don't use 0s. although the EEPROM comes with 0xff filled
+    EELSDataLen SL             = this->slot_log_length;
+	EELSAddr    S_begin        = this->begining;
+	EELSlotSize length         = this->length;
 
-	uint32_t pos = S_begin;
+	EELSAddr pos = S_begin;
 	EELSEpoch cnt = _EELS_ReadCounter(slotNumber, S_begin);   //current counter and position is SLOT_BEGIN
 
 	//usually erased eeproms have [255] in their cells?
@@ -240,7 +240,7 @@ uint32_t _EELS_FindLastPos(EELSh slotNumber) {
 
 	EELSEpoch tmp_cnt;
 
-	for (uint32_t i=(S_begin+ SL); i<(S_begin + length); i+=SL) {
+	for (EELSAddr i=(S_begin+ SL); i<(S_begin + length); i+=SL) {
 		if (i + SL > S_begin+length)   break;
 
 		tmp_cnt = _EELS_ReadCounter(slotNumber, i); //read the address
@@ -258,14 +258,14 @@ uint16_t _EELS_getHealthyLogs(EELSh slotNumber){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 
 #if _EELS_CRC_BYTE_LENGTH == 1
-	uint32_t S_begin    = this->begining;
-	uint16_t SL         = this->slot_log_length;
-	uint16_t length     = this->length;
+    EELSAddr S_begin    = this->begining;
+    EELSlotSize length  = this->length;
+    EELSDataLen SL         = this->slot_log_length;
 	uint8_t buf[this->slot_log_length];     // WARN: buffer on stack
 
 	uint16_t healthyLogs = 0, curroptedLogs = 0;
 
-	for (uint32_t i=(S_begin); i<(S_begin + length); i+=SL) {
+	for (EELSAddr i=(S_begin); i<(S_begin + length); i+=SL) {
 			if ( _EELS_ReadLog(slotNumber, i, buf) )
 				healthyLogs++;
 			else
@@ -279,26 +279,22 @@ uint16_t _EELS_getHealthySequence(EELSh slotNumber){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 
 #if _EELS_CRC_BYTE_LENGTH == 1
-		uint32_t S_begin    = this->begining;
+    EELSAddr S_begin    = this->begining;
 		uint16_t SL         = this->slot_log_length;
 		uint16_t length     = this->length;
 		uint8_t buf[this->slot_log_length]; // WARN: buffer on stack
 
 		uint16_t sequences = 0;
-		uint32_t counter, prev_counter = UINT_MAX-1;
-		for(uint32_t i=(S_begin); i<(S_begin+length); i+= SL){
+		EELSEpoch counter = EELS_EPOCH_NONE-1;
+		for(EELSAddr i=(S_begin); i<(S_begin+length); i+= SL){
 			if (S_begin+length < i+SL)
 				continue;
 			counter = _EELS_ReadCounter(slotNumber, i );
-			if ( (counter != prev_counter + 1)
-			    && !(counter == 1 && prev_counter == this->_counter_max)
-			    )
+			if ( counter == this->epoch_counter )
 			{
 				sequences++;
 				//printf("----_EELS_getHealthySequence [0x%.8X]: Counter:%d Prev:%u, seq:%d SL:%d\n", i ,counter,prev_counter,sequences, SL);
 			}
-			prev_counter = counter;
-
 		}
 
 		return sequences;
@@ -310,26 +306,26 @@ uint16_t _EELS_getHealthySequence(EELSh slotNumber){
 /* ==================================================================== */
 
 
-uint8_t EELS_SlotLogSize(EELSh slotNumber){
+EELSDataLen EELS_SlotLogSize(EELSh slotNumber){
 	return EELSlot(slotNumber)->slot_log_length;
 }
 
-uint32_t EELS_SlotBegin(EELSh slotNumber){
+EELSAddr EELS_SlotBegin(EELSh slotNumber){
 	return EELSlot(slotNumber)->begining;
 }
 
-uint32_t EELS_SlotEnd(EELSh slotNumber){
+EELSAddr EELS_SlotEnd(EELSh slotNumber){
     EELSlot_t*  this = EELSlot(slotNumber);
 	return this->begining + this->length;
 }
 
 
-uint8_t EELS_ReadCell(uint32_t position){
+uint8_t EELS_ReadCell(EELSAddr position){
 	uint8_t result;
 	EELS_EEPROM_READ(position, &result,1);
 	return result;
 }
 
-void EELS_WriteCell(uint32_t position, uint8_t val){
+void EELS_WriteCell(EELSAddr position, uint8_t val){
 	EELS_EEPROM_WRITE(position, (uint8_t*)(&val), 1);
 }

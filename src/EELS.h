@@ -25,7 +25,10 @@
 
 typedef uint8_t     EELSHandle;
 typedef EELSHandle  EELSh;
-
+typedef uint32_t    EELSAddr;
+typedef uint16_t    EELSlotSize;
+typedef uint16_t    EELSlotLen;
+typedef uint8_t     EELSDataLen;
 
 
 
@@ -33,7 +36,7 @@ typedef EELSHandle  EELSh;
 //                          public functions
 uint8_t EELS_Init();
 
-uint8_t EELS_SetSlot    (EELSh slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length);
+uint8_t EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize length, EELSDataLen data_length);
 
 /// @param slotNumber
 /// @param data
@@ -58,18 +61,18 @@ bool    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const buf );
 
 typedef uint8_t     EELSEpoch;
 typedef struct {
-    uint32_t current_position;
+    EELSAddr    current_position;
 
-    uint32_t begining;
-    uint16_t length;
+    EELSAddr    begining;
+    EELSlotSize length;
 
-    uint16_t current_counter;
-    uint16_t _counter_max;
+    EELSlotLen  current_counter;
+    EELSlotLen  _counter_max;
 
     EELSEpoch epoch_counter;
 
-    uint8_t slot_log_length;
-    uint8_t raw_data_size;
+    EELSDataLen slot_log_length;
+    EELSDataLen raw_data_size;
     uint8_t page_records;
 
 }EELSlot_t;
@@ -83,20 +86,20 @@ EELSlot_t*  EELSlot         (EELSh slotNumber){
 uint32_t _EELS_FindLastPos  (EELSh slotNumber);
 uint16_t _EELS_getHealthyLogs(EELSh slotNumber);
 uint16_t _EELS_getHealthySequence(EELSh slotNumber);
-bool     _EELS_ReadLog      (EELSh slotNumber, uint32_t log_start_position, void* const buf);
+bool     _EELS_ReadLog      (EELSh slotNumber, EELSAddr log_start_position, void* const buf);
 
-uint8_t EELS_crc8(const void *data, uint8_t len);
+uint8_t EELS_crc8(const void *data, EELSDataLen len);
 
 
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                      dbg functions
-uint8_t     EELS_SlotLogSize(EELSh slotNumber);
-uint32_t    EELS_SlotBegin  (EELSh slotNumber);
-uint32_t    EELS_SlotEnd    (EELSh slotNumber);
-uint8_t     EELS_ReadCell   (uint32_t position);
-void        EELS_WriteCell  (uint32_t position, uint8_t val);
+EELSDataLen EELS_SlotLogSize(EELSh slotNumber);
+EELSAddr    EELS_SlotBegin  (EELSh slotNumber);
+EELSAddr    EELS_SlotEnd    (EELSh slotNumber);
+uint8_t     EELS_ReadCell   (EELSAddr position);
+void        EELS_WriteCell  (EELSAddr position, uint8_t val);
 
 
 
