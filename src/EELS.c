@@ -6,7 +6,6 @@
  */
 #include "EELS_Conf.h"
 #include "EELS.h"
-#include <math.h>
 
 
 uint32_t _EELS_ReadCounter(EELSh slotNumber, uint32_t addr);
@@ -32,20 +31,23 @@ uint8_t EELS_SetSlot(EELSh slotNumber, uint32_t begin_addr, uint16_t length, uin
 
 	EELSlot_t*  this = EELSlot(slotNumber);
 
-	this->begining = begin_addr;
-	this->length = length;
+	this->begining      = begin_addr;
+	this->length        = length;
 	/*user data length*/
 	this->raw_data_size = data_length;
+	this->_counter_bytes= 1;
 
 	/*calculate initial counter max*/ // +1 at least 1 byte for counter
-	uint16_t init_counter_max = (uint16_t)ceil(length / data_length + _EELS_CRC_BYTE_LENGTH+1) + 2; //always add +2 extra
-	uint8_t bits_required = (uint8_t)ceil(log2(init_counter_max));
-	this->_counter_bytes = (uint8_t)ceil(bits_required / 8.0f);
+	uint16_t init_counter_max = (length / (data_length + _EELS_CRC_BYTE_LENGTH+1) ) + 2; //always add +2 extra
+	if (init_counter_max >= 0x10000)
+	    this->_counter_bytes = 3;
+	else if (init_counter_max >= 0x100)
+        this->_counter_bytes = 2;
 
 	/*Slot datalength*/
 	this->slot_log_length = data_length + _EELS_CRC_BYTE_LENGTH + this->_counter_bytes;
 	/*Recalculate counter max*/
-	this->_counter_max = (uint16_t)ceil(length / this->slot_log_length)+2; //readjust max counter
+	this->_counter_max = (length / this->slot_log_length)+2; //readjust max counter
 
 	_EELS_FindLastPos(slotNumber); //now
 	//printf("Max counter: %d", _slot_arr[slotNumber]._counter_max);
