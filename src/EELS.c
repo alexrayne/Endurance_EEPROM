@@ -50,7 +50,7 @@ uint8_t EELS_SetSlot(EELSh slotNumber, uint32_t begin_addr, uint16_t length, uin
     /*Slot datalength*/
     this->slot_log_length = data_length + EELS_RECOFFS_DATA;
 
-    this->_counter_max = (length / this->slot_log_length)+2; //readjust max counter
+    this->_counter_max = (length / this->slot_log_length); //readjust max counter
 
 	_EELS_FindLastPos(slotNumber); //now
 	//printf("Max counter: %d", _slot_arr[slotNumber]._counter_max);
@@ -60,12 +60,13 @@ uint8_t EELS_SetSlot(EELSh slotNumber, uint32_t begin_addr, uint16_t length, uin
 }
 
 
-void EELS_InsertLog(EELSh slotNumber, const void* src) {
+int EELS_InsertLog(EELSh slotNumber, const void* src) {
 
 	#if (__EELS_DBG__)
 	_EELS_FindLastPos(slotNumber);
 	#endif
 
+	int ok;
     EELSlot_t*  this = EELSlot(slotNumber);
     const uint8_t* data = (const uint8_t*)src;
 
@@ -92,10 +93,14 @@ void EELS_InsertLog(EELSh slotNumber, const void* src) {
 	head[0] = this->epoch_counter;
 	head[1] = EELS_CRC8(data, this->raw_data_size);
 
-	EELS_EEPROM_WRITE(mypos, head, sizeof(head) );
+	ok = EELS_EEPROM_WRITE(mypos, head, sizeof(head) );
+	if (ok < 0)
+	    return ok;
 	mypos += sizeof(head);
 
-	EELS_EEPROM_WRITE(mypos, data, this->raw_data_size);
+	ok = EELS_EEPROM_WRITE(mypos, data, this->raw_data_size);
+    if (ok < 0)
+        return ok;
 	mypos += this->raw_data_size;
 
 	#if (__EELS_DBG__)
@@ -104,6 +109,8 @@ void EELS_InsertLog(EELSh slotNumber, const void* src) {
 		this->current_counter = cnt;
 		this->current_position = mypos -  this->slot_log_length;
 	#endif
+
+	return cnt;
 }
 
 
@@ -140,8 +147,7 @@ uint32_t    eels_index_pos(EELSlot_t*  this, int idx){
     return this->begining + (this->slot_log_length * idx);
 }
 
-/*under development*/
-bool EELS_ReadFromEnd(EELSh slotNumber, int log_num , void* const dst ){
+bool    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const dst){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 
     if ( log_num >= this->_counter_max ) {
@@ -151,9 +157,9 @@ bool EELS_ReadFromEnd(EELSh slotNumber, int log_num , void* const dst ){
         return false;   //head
     }
 
-	#if (__EELS_DBG__)
-	_EELS_FindLastPos(slotNumber);
-	#endif
+    #if (__EELS_DBG__)
+    _EELS_FindLastPos(slotNumber);
+    #endif
 
     uint32_t log_num_pos = eels_index_pos(log_num);
     return _EELS_ReadLog(slotNumber, log_num_pos, dst);

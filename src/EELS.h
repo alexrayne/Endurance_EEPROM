@@ -32,10 +32,24 @@ typedef EELSHandle  EELSh;
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                          public functions
 uint8_t EELS_Init();
-void    EELS_InsertLog  (EELSh slotNumber, const void* data);
+
 uint8_t EELS_SetSlot    (EELSh slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length);
-bool    EELS_ReadFromEnd(EELSh slotNumber, int log_num , void* const buf );
+
+/// @param slotNumber
+/// @param data
+/// @return >= 0 - writen index
+///         < 0  - error code
+int     EELS_InsertLog  (EELSh slotNumber, const void* data);
+
 bool    EELS_ReadLast   (EELSh slotNumber, void* const buf);
+
+/// @param log_num >= 0 - index from head
+///                < 0  - index from tail
+bool    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const buf );
+
+/// @param log_num >= 0 - index from tail
+///                < 0  - index from head
+#define EELS_ReadFromEnd( h, tail_idx , buf ) EELS_ReadIdx(h, -(tail_idx), buf)
 
 
 
