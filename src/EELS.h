@@ -64,6 +64,8 @@ uint16_t _EELS_getHealthyLogs(EELSh slotNumber);
 uint16_t _EELS_getHealthySequence(EELSh slotNumber);
 bool     _EELS_ReadLog      (EELSh slotNumber, uint32_t log_start_position, uint8_t* const buf);
 
+uint8_t EELS_crc8(const void *data, uint8_t len);
+
 
 
 

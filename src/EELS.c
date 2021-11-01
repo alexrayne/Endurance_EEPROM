@@ -150,10 +150,10 @@ bool EELS_ReadFromEnd(EELSh slotNumber, uint16_t log_num , uint8_t* const buf ){
 /* 						PRIVATE FUNCTIONS 								*/
 /* ==================================================================== */
 
-#if EELS_LOCAL_CRC_FN
-
-uint8_t EELS_crc8(uint8_t *data, uint8_t len)
+uint8_t EELS_crc8(const void *src, uint8_t len)
 {
+    const uint8_t* data = (const uint8_t*)src;
+
 	uint8_t crc = 0xff;
 	uint8_t i, j;
 	for (i = 0; i < len; i++) {
@@ -167,8 +167,6 @@ uint8_t EELS_crc8(uint8_t *data, uint8_t len)
 	}
 	return crc;
 }
-
-#endif
 
 
 
