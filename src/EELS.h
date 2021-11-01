@@ -4,6 +4,7 @@
 /*
  * EELS.h
  *
+ * remastered: alexraynepe196@gmail.com
  * Created: 7/24/2019 12:10:27 PM
  *  Author: hasan.jaafar
  */
@@ -34,15 +35,22 @@ typedef uint8_t     EELSDataLen;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                          public functions
-uint8_t EELS_Init();
+enum EELSErrorID{
+    EELS_ERROR_OK = 0,
+    EELS_ERROR_NOSLOT = -1,
+};
+typedef int EELSError;
 
-uint8_t EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize length, EELSDataLen data_length);
+EELSError EELS_Init();
+
+EELSError EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize length, EELSDataLen data_length);
+
 
 /// @param slotNumber
 /// @param data
 /// @return >= 0 - writen index
 ///         < 0  - error code
-int     EELS_InsertLog  (EELSh slotNumber, const void* data);
+EELSError EELS_InsertLog  (EELSh slotNumber, const void* data);
 
 bool    EELS_ReadLast   (EELSh slotNumber, void* const buf);
 
@@ -83,7 +91,7 @@ EELSlot_t*  EELSlot         (EELSh slotNumber){
     return EELslot_arr + slotNumber;
 };
 
-uint32_t _EELS_FindLastPos  (EELSh slotNumber);
+EELSAddr _EELS_FindLastPos  (EELSh slotNumber);
 uint16_t _EELS_getHealthyLogs(EELSh slotNumber);
 uint16_t _EELS_getHealthySequence(EELSh slotNumber);
 bool     _EELS_ReadLog      (EELSh slotNumber, EELSAddr log_start_position, void* const buf);

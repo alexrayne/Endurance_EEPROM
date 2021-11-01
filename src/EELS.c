@@ -19,8 +19,8 @@ EELSlot_t EELslot_arr[EELS_APP_SLOTS];
 /* ==================================================================== */
 
 
-uint8_t EELS_Init(){
-	return 0;
+EELSError EELS_Init(){
+	return EELS_ERROR_OK;
 }
 
 enum {
@@ -36,9 +36,9 @@ enum {
 };
 
 
-uint8_t EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, uint8_t data_length) {
+EELSError EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, uint8_t data_length) {
 	if (slotNumber >= EELS_APP_SLOTS)
-		return 1; //out of boundary!
+		return EELS_ERROR_NOSLOT; //out of boundary!
 
 	EELSlot_t*  this = EELSlot(slotNumber);
 
@@ -56,11 +56,11 @@ uint8_t EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, uin
 	//printf("Max counter: %d", _slot_arr[slotNumber]._counter_max);
 	//printf(" - counter bytes: %d\r\n", _slot_arr[slotNumber]._counter_bytes);
 
-	return 0;
+	return EELS_ERROR_OK;
 }
 
 
-int EELS_InsertLog(EELSh slotNumber, const void* src) {
+EELSError EELS_InsertLog(EELSh slotNumber, const void* src) {
 
 	#if (__EELS_DBG__)
 	_EELS_FindLastPos(slotNumber);
@@ -215,7 +215,7 @@ EELSEpoch _EELS_ReadCounter(EELSh slotNumber, uint32_t addr)
 	return ret_val;
 }
 
-uint32_t _EELS_FindLastPos(EELSh slotNumber) {
+EELSAddr _EELS_FindLastPos(EELSh slotNumber) {
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 
     EELSlotLen  _counter_max   = this->_counter_max; //don't use 0s. although the EEPROM comes with 0xff filled
