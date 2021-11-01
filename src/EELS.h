@@ -34,7 +34,7 @@ typedef EELSHandle  EELSh;
 uint8_t EELS_Init();
 void    EELS_InsertLog  (EELSh slotNumber, const void* data);
 uint8_t EELS_SetSlot    (EELSh slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length);
-bool    EELS_ReadFromEnd(EELSh slotNumber, uint16_t log_num , void* const buf );
+bool    EELS_ReadFromEnd(EELSh slotNumber, int log_num , void* const buf );
 bool    EELS_ReadLast   (EELSh slotNumber, void* const buf);
 
 
@@ -42,15 +42,22 @@ bool    EELS_ReadLast   (EELSh slotNumber, void* const buf);
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                          private functions
 
+typedef uint8_t     EELSEpoch;
 typedef struct {
+    uint32_t current_position;
+
     uint32_t begining;
     uint16_t length;
-    uint32_t current_position;
+
     uint16_t current_counter;
+    uint16_t _counter_max;
+
+    EELSEpoch epoch_counter;
+
     uint8_t slot_log_length;
     uint8_t raw_data_size;
-    uint16_t _counter_max;
-    uint8_t _counter_bytes;
+    uint8_t page_records;
+
 }EELSlot_t;
 
 static inline

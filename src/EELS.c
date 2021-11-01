@@ -8,7 +8,7 @@
 #include "EELS.h"
 
 
-uint32_t _EELS_ReadCounter(EELSh slotNumber, uint32_t addr);
+EELSEpoch _EELS_ReadCounter(EELSh slotNumber, uint32_t addr);
 
 EELSh       _NumOfSlot;
 EELSlot_t EELslot_arr[EELS_APP_SLOTS];
@@ -23,6 +23,17 @@ uint8_t EELS_Init(){
 	return 0;
 }
 
+enum {
+    EELS_RECOFFS_EPOCH  = 0,
+    EELS_RECSIZE_EPOCH  = 1,
+
+    EELS_RECOFFS_CRC    = EELS_RECOFFS_EPOCH + EELS_RECSIZE_EPOCH,
+
+    EELS_RECOFFS_DATA   = EELS_RECOFFS_CRC +_EELS_CRC_BYTE_LENGTH,
+
+    EELS_EPOCH_NONE     = 0xff,
+    EELS_EPOCH_MAX      = EELS_EPOCH_NONE-1,
+};
 
 
 uint8_t EELS_SetSlot(EELSh slotNumber, uint32_t begin_addr, uint16_t length, uint8_t data_length) {
@@ -33,21 +44,13 @@ uint8_t EELS_SetSlot(EELSh slotNumber, uint32_t begin_addr, uint16_t length, uin
 
 	this->begining      = begin_addr;
 	this->length        = length;
+
 	/*user data length*/
 	this->raw_data_size = data_length;
-	this->_counter_bytes= 1;
+    /*Slot datalength*/
+    this->slot_log_length = data_length + EELS_RECOFFS_DATA;
 
-	/*calculate initial counter max*/ // +1 at least 1 byte for counter
-	uint16_t init_counter_max = (length / (data_length + _EELS_CRC_BYTE_LENGTH+1) ) + 2; //always add +2 extra
-	if (init_counter_max >= 0x10000)
-	    this->_counter_bytes = 3;
-	else if (init_counter_max >= 0x100)
-        this->_counter_bytes = 2;
-
-	/*Slot datalength*/
-	this->slot_log_length = data_length + _EELS_CRC_BYTE_LENGTH + this->_counter_bytes;
-	/*Recalculate counter max*/
-	this->_counter_max = (length / this->slot_log_length)+2; //readjust max counter
+    this->_counter_max = (length / this->slot_log_length)+2; //readjust max counter
 
 	_EELS_FindLastPos(slotNumber); //now
 	//printf("Max counter: %d", _slot_arr[slotNumber]._counter_max);
@@ -74,20 +77,23 @@ void EELS_InsertLog(EELSh slotNumber, const void* src) {
 	if (!(this->current_position == S_begin && this->current_counter == 0)) // put description of this situation...
 		mypos += this->slot_log_length;
 	//--------
-	if (++cnt > this->_counter_max) //if counter goes beyond counter max -> set back to 1
-		cnt = 1;
+	if (++cnt > this->_counter_max) {//if counter goes beyond counter max -> set back to 1
+        cnt = 1;
+        ++this->epoch_counter;
+        if (this->epoch_counter >= EELS_EPOCH_NONE)
+            this->epoch_counter = 0;
+	}
 
 	if ((mypos + this->slot_log_length) > S_begin + this->length) // set position to slot begining
-	mypos = S_begin;
+	    mypos = S_begin;
 
 	/*=== LETS DO A WRITE ===*/
-	char char_cnt[4] = { (char)(cnt), (char)(cnt >> 8), (char)(cnt >> 16), (char)(cnt >> 24) };
-	EELS_EEPROM_WRITE(mypos, (uint8_t*)char_cnt, this->_counter_bytes);
-	mypos += this->_counter_bytes;
+	char head[ EELS_RECOFFS_DATA ];
+	head[0] = this->epoch_counter;
+	head[1] = EELS_CRC8(data, this->raw_data_size);
 
-	uint8_t mycrc = EELS_CRC8(data, this->raw_data_size);
-	EELS_EEPROM_WRITE(mypos, (uint8_t*)(&mycrc), _EELS_CRC_BYTE_LENGTH);
-	mypos += _EELS_CRC_BYTE_LENGTH;
+	EELS_EEPROM_WRITE(mypos, head, sizeof(head) );
+	mypos += sizeof(head);
 
 	EELS_EEPROM_WRITE(mypos, data, this->raw_data_size);
 	mypos += this->raw_data_size;
@@ -114,40 +120,43 @@ bool EELS_ReadLast(EELSh slotNumber, void* const buf){
 }
 
 
-/*under development*/
-bool EELS_ReadFromEnd(EELSh slotNumber, uint16_t log_num , void* const dst ){
-    EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
-    uint8_t* buf = (uint8_t*)dst;
+static
+uint32_t    eels_index_pos(EELSlot_t*  this, int idx){
+    if ( idx >= this->_counter_max ) {
+        return -1;  //tail
+    }
+    else if ( -idx >= this->_counter_max ) {
+        return 0;   //head
+    }
+    // TODO: check actual slot fill size
 
-    if (log_num >= this->_counter_max){ //cant read > slot size
-		return 0;
-	}
+    uint32_t now_counter   = this->current_counter;
+    idx += now_counter;
+    if (idx >= this->_counter_max)
+        idx -= this->_counter_max;
+    else if (idx < 0)
+        idx += this->_counter_max;
+
+    return this->begining + (this->slot_log_length * idx);
+}
+
+/*under development*/
+bool EELS_ReadFromEnd(EELSh slotNumber, int log_num , void* const dst ){
+    EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
+
+    if ( log_num >= this->_counter_max ) {
+        return false;  //tail
+    }
+    else if ( -log_num >= this->_counter_max ) {
+        return false;   //head
+    }
 
 	#if (__EELS_DBG__)
 	_EELS_FindLastPos(slotNumber);
 	#endif
 
-	uint32_t last_log_pos       = this->current_position;
-	uint32_t last_log_counter   = this->current_counter;
-
-	uint32_t diff_length        = (this->slot_log_length * log_num);
-	uint32_t padding_bytes      = this->length
-	                            - ((this->_counter_max-1)*this->slot_log_length);
-
-	//printf("\t diff_length=%u \t padding_bytes=%d\n", diff_length, padding_bytes);
-	if (diff_length < last_log_pos){
-		uint32_t log_num_pos = last_log_pos - diff_length;
-		//printf("\t log_num_pos=0x%x \t padding_bytes=%d\n", log_num_pos, padding_bytes);
-		if (log_num_pos >= this->begining){
-				return _EELS_ReadLog(slotNumber, log_num_pos, buf);
-		}else{
-				log_num_pos += (this->length - padding_bytes - this->slot_log_length );
-				return _EELS_ReadLog(slotNumber, log_num_pos, buf);
-				//uint32_t slot_last_addr = _slot_arr[slotNumber].begining + ((_slot_arr[slotNumber]._counter_max - 2 ) * _slot_arr[slotNumber].slot_log_length);
-		}
-
-	}
-	return 0; //should never reach here.
+    uint32_t log_num_pos = eels_index_pos(log_num);
+    return _EELS_ReadLog(slotNumber, log_num_pos, dst);
 }
 
 
@@ -181,23 +190,21 @@ bool _EELS_ReadLog(EELSh slotNumber, uint32_t log_start_position, void* const ds
     uint8_t* buf = (uint8_t*)dst;
 
     uint8_t slotcrc=  0 ;
-	EELS_EEPROM_READ(log_start_position + this->_counter_bytes ,
-							(uint8_t*)&slotcrc,
-							_EELS_CRC_BYTE_LENGTH);
-	EELS_EEPROM_READ(log_start_position + this->_counter_bytes + _EELS_CRC_BYTE_LENGTH ,
-							buf,
-							this->raw_data_size);
+	EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_CRC,
+							(uint8_t*)&slotcrc, _EELS_CRC_BYTE_LENGTH );
+	EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_DATA ,
+							buf, this->raw_data_size );
 	uint8_t calculatedCrc = EELS_CRC8(buf, this->raw_data_size);
 	return calculatedCrc == slotcrc;
 }
 
-uint32_t _EELS_ReadCounter(EELSh slotNumber, uint32_t addr)
+EELSEpoch _EELS_ReadCounter(EELSh slotNumber, uint32_t addr)
 {
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 
     uint32_t ret_val = 0;
 	//check with endianness and the way i write the counter bytes.
-	EELS_EEPROM_READ(addr, (uint8_t*)&ret_val, this->_counter_bytes);
+	EELS_EEPROM_READ(addr, (uint8_t*)&ret_val, EELS_RECSIZE_EPOCH);
 
 	return ret_val;
 }
@@ -211,27 +218,31 @@ uint32_t _EELS_FindLastPos(EELSh slotNumber) {
 	uint16_t length         = this->length;
 
 	uint32_t pos = S_begin;
-	uint32_t cnt = _EELS_ReadCounter(slotNumber, S_begin);   //current counter and position is SLOT_BEGIN
+	EELSEpoch cnt = _EELS_ReadCounter(slotNumber, S_begin);   //current counter and position is SLOT_BEGIN
+
 	//usually erased eeproms have [255] in their cells?
-	if (cnt > this->_counter_max) //if counter is invalid (bigger than max)
+	if (cnt >= EELS_EPOCH_NONE) {
+	    //if counter is invalid (bigger than max) - looks slot empty
 		cnt = 0; //reset cnt so if next counter=1 it will be set ..
-	uint32_t tmp_cnt = 0;
+		this->epoch_counter = 0;
+	    this->current_position = pos;
+	    this->current_counter = cnt;
+		return pos;
+	}
+
+	this->epoch_counter = cnt;
+
+	EELSEpoch tmp_cnt;
 
 	for (uint32_t i=(S_begin+ SL); i<(S_begin + length); i+=SL) {
 		if (i + SL > S_begin+length)   break;
 
 		tmp_cnt = _EELS_ReadCounter(slotNumber, i); //read the address
 
-		if (tmp_cnt == cnt + 1){// if (current = previous +1)
-			cnt = tmp_cnt;
-			pos = i;
-		}else if (tmp_cnt == 1 && cnt == _counter_max) { //if (previous == max AND current == 1)
-			cnt = tmp_cnt;
+		if (tmp_cnt == cnt){// if (current = previous )
 			pos = i;
 		}
 	}
-	if (cnt > this->_counter_max)
-		cnt = 1;
 	this->current_position = pos;
 	this->current_counter = cnt;
 	return pos;
@@ -249,14 +260,7 @@ uint16_t _EELS_getHealthyLogs(EELSh slotNumber){
 	uint16_t healthyLogs = 0, curroptedLogs = 0;
 
 	for (uint32_t i=(S_begin); i<(S_begin + length); i+=SL) {
-			uint8_t LogCRC=  0 ;
-			EELS_EEPROM_READ(i + this->_counter_bytes,
-									 (uint8_t*)&LogCRC,
-									 _EELS_CRC_BYTE_LENGTH);
-			EELS_EEPROM_READ(i + this->_counter_bytes + _EELS_CRC_BYTE_LENGTH ,
-									buf, this->raw_data_size);
-			uint8_t calculatedCrc = EELS_CRC8(buf, this->raw_data_size);
-			if (calculatedCrc == LogCRC)
+			if ( _EELS_ReadLog(slotNumber, i, buf) )
 				healthyLogs++;
 			else
 				curroptedLogs++;
