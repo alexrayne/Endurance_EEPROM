@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 
 #ifndef TWI0
 	#define TWI0 0
@@ -7,7 +8,7 @@
 
 
 	typedef struct {
-		UINT16 xx;
+		uint16_t xx;
 	} Twi;
 #endif
 

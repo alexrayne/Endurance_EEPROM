@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="EELS\EELS.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="EELS\driver\E24LC64.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -33,12 +30,18 @@
     <ClInclude Include="EELS\EELS_EEPROM_Interface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\EELS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EELS\EELS.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EELS_Conf.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="testcpp.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="EELS\EELS.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="EELS\driver\E24LC64.cpp">
@@ -48,6 +51,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="EELS\EELS_EEPROM_Interface.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\EELS.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="EELS\EELS_api.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
