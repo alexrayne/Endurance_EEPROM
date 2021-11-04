@@ -3,12 +3,24 @@
 #define EELS_CONF_H_
 
 
-
-/* Include the eeprom functions file here: */
-#include "FlashMem.h"
 /* DEFINE EEPROM FUNCTIONS HERE: */
-#define EELS_EEPROM_READ(addr,buf,length) ROM_Read(addr,buf,length)
-#define EELS_EEPROM_WRITE(addr,buf,length) ROM_Write(addr,buf,length)
+#define EELS_EEPROM_READ(addr,buf,length)   ROM_Read(addr,buf,length)
+#define EELS_EEPROM_WRITE(addr,buf,length)  ROM_Write(addr,buf,length)
+
+
+///////////////////////////////////////////////////////////////////////////////
+///     proto-threads API
+
+#if 0
+
+// contiki  proto-threads api
+#include <sys/pt.h>
+
+#define EELS_PT_DECL    struct pt pt
+
+#endif
+
+
 
 /* how many slots are used in your application: */
 #define EELS_APP_SLOTS 5
@@ -19,14 +31,7 @@
 
 
 /*CRC8*/
-#define EELS_LOCAL_CRC_FN (1)
-#if EELS_LOCAL_CRC_FN
-  #define EELS_CRC8(...) EELS_crc8(__VA_ARGS__)
-#else
-  /*crc_function(uint8_t *data, uint8_t len)*/
-  #define EELS_CRC8(...) YOUR_CRC_FUNCTION(__VA_ARGS__)
-
-#endif
+#define EELS_CRC8(...) EELS_crc8(__VA_ARGS__)
 
 
 #endif

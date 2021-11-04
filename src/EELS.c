@@ -8,11 +8,54 @@
 #include "EELS.h"
 
 
+/* ==================================================================== */
 
 EELSlot_t EELslot_arr[EELS_APP_SLOTS];
 
 
+/* ==================================================================== */
+///         proto-treads API dummy
+#ifndef EELS_WAIT
 
+#if defined(PT_THREAD)
+// contiki  proto-threads api
+
+#define EELS_PT         struct pt* pt = &(this->pt);
+
+//  @args pt
+#define EELS_RESET()    PT_INIT( &(this->pt) )
+#define EELS_BEGIN()    PT_BEGIN(pt);
+#define EELS_END()      PT_END(pt);
+#define EELS_RESULT(x)  PT_INIT(pt); return x
+#define EELS_READY()    PT_IS_NULL(pt)
+
+//  @args pt, ok
+#define EELS_WAIT( statemt ) PT_WAIT_WHILE(pt, EELS_SCHEDULE( (ok = (statemt), ok) ) )
+
+
+#else
+
+// no proto-threads
+#define EELS_PT
+#define EELS_BEGIN()
+#define EELS_END()
+#define EELS_RESET()
+#define EELS_READY()    true
+#define EELS_RESULT(x)  return x
+
+//  @args ok
+#define EELS_WAIT( statemt ) ok = statemt
+
+#endif
+
+#endif
+
+#ifndef EELS_EEPROM_WAIT
+// if status waits not need
+#define EELS_EEPROM_WAIT()  EELS_ERROR_OK
+#endif
+
+/* ==================================================================== */
 
 /// EELS_Conf can override cpu specific CLZ operation as eels_clz(x)
 #ifndef eels_clz
@@ -48,11 +91,13 @@ unsigned eels_clz(unsigned x) {
 #endif  //eels_clz
 
 #ifndef LOG2_CEIL
-#define LOG2_1(n) (((n) >= 2u) ? 1u : 0u)
-#define LOG2_2(n) (((n) >= 1u<<2) ? (2 + LOG2_1((n)>>2)) : LOG2_1(n))
-#define LOG2_4(n) (((n) >= 1u<<4) ? (4 + LOG2_2((n)>>4)) : LOG2_2(n))
-#define LOG2_8(n) (((n) >= 1u<<8) ? (8 + LOG2_4((n)>>8)) : LOG2_4(n))
-#define LOG2_CEIL(n)   (((n) >= 1u<<16) ? (16 + LOG2_8((n)>>16)) : LOG2_8(n))
+#define EELS_LOG2_1(n) (((n) >= 2u) ? 1u : 0u)
+#define EELS_LOG2_2(n) (((n) >= 1u<<2) ? (2 + EELS_LOG2_1((n)>>2)) : EELS_LOG2_1(n))
+#define EELS_LOG2_4(n) (((n) >= 1u<<4) ? (4 + EELS_LOG2_2((n)>>4)) : EELS_LOG2_2(n))
+#define EELS_LOG2_8(n) (((n) >= 1u<<8) ? (8 + EELS_LOG2_4((n)>>8)) : EELS_LOG2_4(n))
+#define EELS_LOG2_CEIL(n)   (((n) >= 1u<<16) ? (16 + EELS_LOG2_8((n)>>16)) : EELS_LOG2_8(n))
+#else
+#define EELS_LOG2_CEIL(n)   LOG2_CEIL(n)
 #endif
 
 static
@@ -84,6 +129,7 @@ void EELS_Init(){
         this->page_size         = 0;
         this->page_offs         = 0;
         this->page_limit        = 0;
+        EELS_RESET();
     }
 }
 
@@ -92,7 +138,7 @@ enum {
     EELS_RECSIZE_EPOCH  = 1,
 
     EELS_RECOFFS_CRC    = EELS_RECOFFS_EPOCH + EELS_RECSIZE_EPOCH,
-    EELS_RECSIZE_HEAD   = EELS_RECOFFS_CRC +_EELS_CRC_BYTE_LENGTH,
+    //EELS_RECSIZE_HEAD   = EELS_RECOFFS_CRC +_EELS_CRC_BYTE_LENGTH,
 
     EELS_RECOFFS_DATA   = EELS_RECSIZE_HEAD,
 
@@ -106,6 +152,8 @@ EELSError EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, u
 
 	EELSlot_t*  this = EELSlot(slotNumber);
 
+	EELS_RESET();
+
 	/*user data length*/
 	this->raw_data_size = data_length;
     /*Slot datalength*/
@@ -117,7 +165,7 @@ EELSError EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, u
 #else
     enum {
         page_size = EELS_PAGE_SIZE,
-        page_2pwr = LOG2_CEIL(EELS_PAGE_SIZE),
+        page_2pwr = EELS_LOG2_CEIL(EELS_PAGE_SIZE),
     };
 #endif
 
@@ -246,7 +294,7 @@ EELSPosition eels_pos(EELSlot_t*  this, EELSAddr page, EELSAddr ofs){
 static
 unsigned    eels_page_idx(EELSlot_t*  this, EELSAddr page){
 #ifdef EELS_PAGE_SIZE
-    enum { page_2pwr = LOG2_CEIL(EELS_PAGE_SIZE) , };
+    enum { page_2pwr = EELS_LOG2_CEIL(EELS_PAGE_SIZE) , };
     return this->page_records *  ( (page - this->begining) >> page_2pwr );
 #else
     return this->page_records *  ( (page - this->begining) >> this->page_2pwr );
@@ -381,16 +429,25 @@ void eels_write_advance(EELSlot_t*  this){
     this->current_counter = cnt;
 }
 
-EELSIndex EELS_InsertLog(EELSh slotNumber, const void* src) {
+
+
+EELSIndex _EELS_InsertLog(EELSh slotNumber, const void* src, EELSRecHead* head) {
 
 	#if (__EELS_DBG__)
 	_EELS_FindLastPos(slotNumber);
 	#endif
 
-	int ok;
     EELSlot_t*  this = EELSlot(slotNumber);
-    const uint8_t* data = (const uint8_t*)src;
+    int ok;
+    EELS_PT;
 
+    EELS_BEGIN();
+
+    EELS_WAIT( EELS_EEPROM_WAIT() );
+    if (ok < 0)
+        EELS_RESULT(ok);
+
+    {
     EELSlotLen cnt    = this->current_counter;
     if (cnt >= this->_counter_max)
     //if (mypos > this->write_position)
@@ -409,21 +466,36 @@ EELSIndex EELS_InsertLog(EELSh slotNumber, const void* src) {
             this->epoch_counter = 0;
     }
 
+    }
+
     /*=== LETS DO A WRITE ===*/
+    if (head == NULL)
+        head = &this->head;
+	head->raw[0] = this->epoch_counter;
+	head->raw[1] = EELS_CRC8(src, this->raw_data_size);
 
-    char head[ EELS_RECSIZE_HEAD ];
-	head[0] = this->epoch_counter;
-	head[1] = EELS_CRC8(data, this->raw_data_size);
+	if (head == src){
+	    // provided contigous record for write
+	    ok = EELS_EEPROM_WRITE( this->write_position, src, this->slot_log_length);
+	    if (ok < 0)
+	        EELS_RESULT(ok);
+	}
+	else {
 
-	ok = EELS_EEPROM_WRITE(mypos, head, sizeof(head) );
-	if (ok < 0)
-	    return ok;
-	mypos += sizeof(head);
+        ok = EELS_EEPROM_WRITE( this->write_position + EELS_RECOFFS_DATA , src, this->raw_data_size);
+        if (ok < 0)
+            EELS_RESULT(ok);
 
-	ok = EELS_EEPROM_WRITE(mypos, data, this->raw_data_size);
-    if (ok < 0)
-        return ok;
-	mypos += this->raw_data_size;
+        EELS_WAIT( EELS_EEPROM_WAIT() );
+        if (ok < 0)
+            EELS_RESULT(ok);
+
+        // complete record, by write it`s head
+        ok = EELS_EEPROM_WRITE( this->write_position, head, EELS_RECSIZE_HEAD );
+        if (ok < 0)
+            EELS_RESULT(ok);
+
+	}
 
 	#if (__EELS_DBG__)
 		_EELS_FindLastPos(slotNumber);
@@ -431,11 +503,21 @@ EELSIndex EELS_InsertLog(EELSh slotNumber, const void* src) {
 		eels_write_advance(this);
 	#endif
 
-	return this->current_counter;
+    EELS_RESULT(this->current_counter);
+	EELS_END();
+}
+
+EELSError EELS_InsertRec  (EELSh slotNumber, EELSRecHead* rec){
+    return _EELS_InsertLog(slotNumber, rec, rec);
+}
+
+EELSIndex EELS_InsertLog(EELSh slotNumber, const void* src){
+    return _EELS_InsertLog(slotNumber, src, NULL);
 }
 
 
-bool EELS_ReadLast(EELSh slotNumber, void* const buf){
+
+EELSError EELS_ReadLast(EELSh slotNumber, void* const buf){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 	#if (__EELS_DBG__)
 	_EELS_FindLastPos(slotNumber);
@@ -459,15 +541,18 @@ EELSPosition    EELS_PosNext(EELSh slotNumber, EELSPosition from){
     return eels_next_pos(this, from);
 }
 
-bool            EELS_ReadPos(EELSh slotNumber, EELSPosition at , void* const buf ){
+EELSError            EELS_ReadPos(EELSh slotNumber, EELSPosition at , void* const buf ){
     return _EELS_ReadLog(slotNumber, at, buf);
 }
 
 
 
-bool    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const dst){
+EELSError    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const dst){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
+    uint32_t log_num_pos = 0;
+    EELS_PT;
 
+    if (EELS_READY()) {
     if ( log_num >= this->_counter_max ) {
         return false;  //tail
     }
@@ -479,7 +564,9 @@ bool    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const dst){
     _EELS_FindLastPos(slotNumber);
     #endif
 
-    uint32_t log_num_pos = eels_relative_pos(this, log_num);
+    log_num_pos = eels_relative_pos(this, log_num);
+    }
+
     return _EELS_ReadLog(slotNumber, log_num_pos, dst);
 }
 
@@ -509,17 +596,45 @@ uint8_t EELS_crc8(const void *src, EELSDataLen len)
 
 
 
-bool _EELS_ReadLog(EELSh slotNumber, EELSAddr log_start_position, void* const dst){
+EELSError _EELS_ReadLog(EELSh slotNumber, EELSAddr log_start_position, void* const dst){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
+    EELS_PT;
     uint8_t* buf = (uint8_t*)dst;
+    EELSError ok;
 
-    uint8_t slotcrc=  0 ;
-	EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_CRC,
-							(uint8_t*)&slotcrc, _EELS_CRC_BYTE_LENGTH );
-	EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_DATA ,
+    EELS_BEGIN();
+
+    EELS_WAIT( EELS_EEPROM_WAIT() );
+    if (ok < 0)
+        EELS_RESULT(ok);
+
+    ok = EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_DATA ,
 							buf, this->raw_data_size );
-	uint8_t calculatedCrc = EELS_CRC8(buf, this->raw_data_size);
-	return calculatedCrc == slotcrc;
+    if (ok < 0)
+        EELS_RESULT(ok);
+
+    if ( EELS_SCHEDULE(ok) )
+        EELS_WAIT( EELS_EEPROM_WAIT() );
+
+    if (ok < 0)
+        EELS_RESULT(ok);
+
+	{
+	    uint8_t slotcrc=  0 ;
+	    ok = EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_CRC,
+	                            (uint8_t*)&slotcrc, _EELS_CRC_BYTE_LENGTH );
+	    if (ok >= 0){
+	        ok = EELS_ERROR_NOK;
+
+	        uint8_t calculatedCrc = EELS_CRC8(buf, this->raw_data_size);
+	        if (calculatedCrc != slotcrc)
+	            ok = EELS_ERROR_NOK;
+	    }
+
+	}
+    EELS_RESULT( ok );
+
+	EELS_END();
 }
 
 EELSEpoch _EELS_ReadCounter(EELSh slotNumber, EELSAddr addr)
@@ -528,9 +643,11 @@ EELSEpoch _EELS_ReadCounter(EELSh slotNumber, EELSAddr addr)
 
     uint32_t ret_val = 0;
 	//check with endianness and the way i write the counter bytes.
-	EELS_EEPROM_READ(addr, (uint8_t*)&ret_val, EELS_RECSIZE_EPOCH);
-
-	return ret_val;
+    EELSError ok = EELS_EEPROM_READ(addr, (uint8_t*)&ret_val, EELS_RECSIZE_EPOCH);
+    if (ok >= 0)
+        return ret_val;
+    else
+        return ok; //EELS_EPOCH_NONE;
 }
 
 EELSAddr _EELS_FindLastPos(EELSh slotNumber) {

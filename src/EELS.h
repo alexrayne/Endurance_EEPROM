@@ -11,7 +11,7 @@
 
 
 
-//#include "hal_flash.h"
+#include <EELS_Conf.h>
 #include <stdbool.h>
 #include <limits.h>
 #include <stdint.h>
@@ -46,17 +46,66 @@ typedef uint16_t    EELSlotLen;
 typedef uint8_t     EELSDataLen;
 typedef uint8_t     EELSPageLen;
 
+/// @brief >= 0 - index position in slot.
+///         < 0 - error code
+typedef int EELSIndex;
+
+
+
+/// @brief eels records a headed with internal info.
+///         So structures, that are headed with this EELS header, can writes faster since writes by one eeprom-operation.
+///         @sa EELS_InsertRec
+enum {
+    EELS_RECSIZE_HEAD = 2,///< EELS_RECSIZE_HEAD
+};
+
+struct EELSRecHead {
+    char    raw[EELS_RECSIZE_HEAD];
+};
+typedef struct EELSRecHead EELSRecHead;
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+enum EELSErrorID{
+#ifdef EELS_PT_DECL
+    EELS_ERROR_WAIT         = 0,
+
+#ifdef _EELS_ERROR_OK
+#else
+    EELS_ERROR_OK           = 1,
+#endif
+
+#else   // no pt-threads
+    EELS_ERROR_OK           = 0,
+#endif
+
+    EELS_ERROR_NOK,
+
+    EELS_ERROR_NOSLOT       = -1,
+    // not supports if EELS_PageAlign try on pagesize < log record size
+    EELS_ERROR_SMALLPAGE    = -2,
+
+};
+typedef int EELSError;
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+/// @brief provide proto-thread waiting test
+#ifndef EELS_SCHEDULE
+#ifdef EELS_PT_DECL
+#define EELS_SCHEDULE(state)    ( (state) != EELS_ERROR_WAIT )
+#else
+#define EELS_SCHEDULE(state)    ((state), true)
+#endif
+#endif
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //                          public functions
-enum EELSErrorID{
-    EELS_ERROR_OK           = 0,
-    EELS_ERROR_NOSLOT       = -1,
-    // not supports if EELS_PageAlign try on pagesize < log record size
-    EELS_ERROR_SMALLPAGE    = -2,
-};
-typedef int EELSError;
 
 void    EELS_Init();
 
@@ -75,15 +124,13 @@ EELSError EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize le
 
 //================================================================================================
 
-/// @brief >= 0 - index position in slot.
-///         < 0 - error code
-typedef int EELSIndex;
+EELSError EELS_InsertLog  (EELSh slotNumber, const void* data);
 
-/// @param slotNumber
-/// @param data
-/// @return >= 0 - writen index
-///         < 0  - error code
-EELSIndex EELS_InsertLog  (EELSh slotNumber, const void* data);
+/// @brief write eels-record content.
+/// @arg   rec - slot record, with data content filled.
+/// @description   Since record is contigous, it can writes to eeprom by single operation,
+///         that provides write speed as fast as possible
+EELSError EELS_InsertRec  (EELSh slotNumber, EELSRecHead* rec);
 
 
 
@@ -92,17 +139,18 @@ typedef EELSAddr    EELSPosition;
 
 EELSPosition    EELS_PosIdx (EELSh slotNumber, int idx);
 EELSPosition    EELS_PosNext(EELSh slotNumber, EELSPosition from);
-bool            EELS_ReadPos(EELSh slotNumber, EELSPosition at , void* const buf );
+
+EELSError       EELS_ReadPos(EELSh slotNumber, EELSPosition at , void* const buf );
 
 /// @param log_num >= 0 - index from head
 ///                < 0  - index from tail
-bool    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const buf );
+EELSError       EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const buf );
 
 /// @param log_num >= 0 - index from tail
 ///                < 0  - index from head
 #define EELS_ReadFromEnd( h, tail_idx , buf ) EELS_ReadIdx(h, -(tail_idx), buf)
 
-bool    EELS_ReadLast   (EELSh slotNumber, void* const buf);
+EELSError       EELS_ReadLast   (EELSh slotNumber, void* const buf);
 
 
 
@@ -133,6 +181,13 @@ typedef struct {
     EELSPageLen page_offs;
     EELSPageLen page_limit;
 
+    // writing context
+    EELSRecHead head;
+
+#ifdef EELS_PT_DECL
+    EELS_PT_DECL;
+#endif
+
 }EELSlot_t;
 
 static inline
@@ -144,7 +199,7 @@ EELSlot_t*  EELSlot         (EELSh slotNumber){
 EELSAddr _EELS_FindLastPos  (EELSh slotNumber);
 uint16_t _EELS_getHealthyLogs(EELSh slotNumber);
 uint16_t _EELS_getHealthySequence(EELSh slotNumber);
-bool     _EELS_ReadLog      (EELSh slotNumber, EELSAddr log_start_position, void* const buf);
+EELSError   _EELS_ReadLog      (EELSh slotNumber, EELSAddr log_start_position, void* const buf);
 
 uint8_t EELS_crc8(const void *data, EELSDataLen len);
 
