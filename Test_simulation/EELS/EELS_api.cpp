@@ -21,6 +21,14 @@ uint8_t EELS::SetSlot(uint8_t slotNumber, uint16_t begin_addr, uint16_t length, 
     return EELS_SetSlot(slotNumber, begin_addr, length, data_length);
 }
 
+EELSError EELS::PageAlign(EELSh slotNumber, EELSlotLen page_size){
+    return EELS_PageAlign(slotNumber, page_size);
+}
+
+EELSError EELS::PageSection(EELSh slotNumber, EELSPageLen page_offs, EELSPageLen sec_size){
+    return EELS_PageSection(slotNumber, page_offs, sec_size);
+}
+
 uint8_t EELS::ReadEeprom(uint16_t addr) {
 	uint8_t ret_val;
 	_eeprom_obj->eeprom_read(addr, &ret_val);
@@ -51,6 +59,10 @@ uint16_t EELS::GetLogSize(uint8_t slotNumber) {
 
 uint16_t EELS::GetLastPos(uint8_t slotNumber) {
 	return _EELS_FindLastPos(slotNumber);
+}
+
+uint16_t EELS::PageSize(uint8_t slotNumber){
+    return (*this)[slotNumber].page_size;
 }
 
 void EELS::InsertLog(uint8_t slotNumber, uint8_t* data) {

@@ -31,11 +31,14 @@ public:
 	EELS(Twi* pTWI, uint8_t addr,uint8_t slots);
 	void InsertLog(uint8_t slotNumber, uint8_t* data);
 	uint8_t SetSlot(uint8_t slotNumber, uint16_t begin_addr, uint16_t length, uint8_t data_length);
+    EELSError PageAlign(EELSh slotNumber, EELSlotLen page_size);
+    EELSError PageSection(EELSh slotNumber, EELSPageLen page_offs, EELSPageLen sec_size);
 
 	uint16_t GetLogPos(uint8_t slotNumber);
 	uint16_t GetCounter(uint8_t slotNumber);
 	uint16_t GetLogSize(uint8_t slotNumber);
 	uint16_t GetLastPos(uint8_t slotNumber);
+    uint16_t PageSize(uint8_t slotNumber);
 
 	ee_slot_t& operator[](uint8_t i);//get slot
 
