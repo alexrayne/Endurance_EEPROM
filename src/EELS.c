@@ -8,10 +8,66 @@
 #include "EELS.h"
 
 
-EELSEpoch _EELS_ReadCounter(EELSh slotNumber, uint32_t addr);
 
 EELSlot_t EELslot_arr[EELS_APP_SLOTS];
 
+
+
+
+/// EELS_Conf can override cpu specific CLZ operation as eels_clz(x)
+#ifndef eels_clz
+#ifdef clz
+#define eels_clz(x)      clz(x)
+
+#elif defined __CLZ
+#define eels_clz(x)              __CLZ(x)
+
+#elif defined (__GNUC__)
+#define eels_clz(x)              __builtin_clz(x)
+
+#elif defined (_MSC_VER)
+#include <intrin.h>
+
+static inline
+unsigned eels_clz(unsigned x) {
+    if (x == 0)
+        return 32;
+
+    unsigned long leading_zero = 0;
+
+    if ( _BitScanReverse(&leading_zero, x) )
+        return 31 - leading_zero;
+    else
+        // Same remarks as above
+        return 32;
+}
+
+#else
+#define eels_clz(x)              __clz(x)
+#endif
+#endif  //eels_clz
+
+#ifndef LOG2_CEIL
+#define LOG2_1(n) (((n) >= 2u) ? 1u : 0u)
+#define LOG2_2(n) (((n) >= 1u<<2) ? (2 + LOG2_1((n)>>2)) : LOG2_1(n))
+#define LOG2_4(n) (((n) >= 1u<<4) ? (4 + LOG2_2((n)>>4)) : LOG2_2(n))
+#define LOG2_8(n) (((n) >= 1u<<8) ? (8 + LOG2_4((n)>>8)) : LOG2_4(n))
+#define LOG2_CEIL(n)   (((n) >= 1u<<16) ? (16 + LOG2_8((n)>>16)) : LOG2_8(n))
+#endif
+
+static
+int eels_log2ceil(unsigned x){
+    if (x == 0) return -1;
+
+    enum { INTBITS = sizeof(unsigned)*8, };
+    unsigned pow2 = INTBITS - eels_clz(x);
+    if ( ((x-1)&x ) == 0)
+        --pow2;
+    return pow2;
+}
+
+EELSEpoch _EELS_ReadCounter(EELSh slotNumber, uint32_t addr);
+static EELSAddr    eels_pos_page(EELSlot_t*  this, EELSPosition x);
 
 /* ==================================================================== */
 /* 						PUBLIC FUNCTIONS 								*/
@@ -44,26 +100,45 @@ enum {
     EELS_EPOCH_MAX      = EELS_EPOCH_NONE-1,
 };
 
-
 EELSError EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, uint8_t data_length) {
 	if (slotNumber >= EELS_APP_SLOTS)
 		return EELS_ERROR_NOSLOT; //out of boundary!
 
 	EELSlot_t*  this = EELSlot(slotNumber);
 
-	this->begining      = begin_addr;
-	this->length        = length;
-
 	/*user data length*/
 	this->raw_data_size = data_length;
     /*Slot datalength*/
     this->slot_log_length = data_length + EELS_RECOFFS_DATA;
 
-    if (this->page_size > 0) {
+#ifndef EELS_PAGE_SIZE
+    unsigned page_size = this->page_size;
+    unsigned page_2pwr = this->page_2pwr;
+#else
+    enum {
+        page_size = EELS_PAGE_SIZE,
+        page_2pwr = LOG2_CEIL(EELS_PAGE_SIZE),
+    };
+#endif
+
+    if ( page_size > 0 ) {
         // page aligned
-        unsigned sec_size = this->page_size;
+
+        // align slot bounds to pages
+        this->begining      = eels_pos_page(this, begin_addr);
+
+        unsigned ofs = begin_addr - this->begining;
+        this->length        = length + ofs;
+
+        if (ofs > this->page_offs){
+            this->begining  += page_size;
+            this->length    -= page_size;
+        }
+
+        // section aligned
+        unsigned sec_size = page_size;
         if (this->page_limit > this->page_offs){
-            sec_size = this->page_limit > this->page_offs;
+            sec_size = this->page_limit - this->page_offs;
         }
 
         unsigned page_records = 1;
@@ -74,10 +149,24 @@ EELSError EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, u
             // TODO: provide support records > pagesize
             return  EELS_ERROR_SMALLPAGE;
 
-        this->_counter_max  = (this->length / sec_size) * page_records;
+        // align actual page_limit to records. eels_pred_pos need it
+        this->page_limit = this->page_offs + page_records* this->slot_log_length;
+
+        unsigned pages = (this->length >> page_2pwr);
+
+        // last page section maybe used, need correct for it
+        ofs = this->length - (pages << page_2pwr);
+        if (ofs >= this->page_limit)
+            ++pages;
+
+        this->length        =  pages * page_size;
+        this->_counter_max  =  pages * page_records;
         this->page_records = page_records;
     }
     else {
+        this->begining      = begin_addr;
+        this->length        = length;
+
         this->_counter_max = (length / this->slot_log_length); //readjust max counter
         this->page_records = 0;
     }
@@ -94,7 +183,13 @@ EELSError EELS_PageAlign  (EELSh slotNumber, EELSlotLen page_size){
         return EELS_ERROR_NOSLOT; //out of boundary!
 
     EELSlot_t*  this = EELSlot(slotNumber);
+
+#ifndef EELS_PAGE_SIZE
     this->page_size     = page_size;
+    this->page_2pwr     = eels_log2ceil(page_size);
+#else
+    enum ( page_size  = EELS_PAGE_SIZE, };
+#endif
     this->page_offs     = 0;
     this->page_limit    = (EELSPageLen)page_size;
 
@@ -146,6 +241,16 @@ EELSAddr    eels_pos_ofs(EELSlot_t*  this, EELSPosition x){
 static
 EELSPosition eels_pos(EELSlot_t*  this, EELSAddr page, EELSAddr ofs){
     return page + ofs;
+}
+
+static
+unsigned    eels_page_idx(EELSlot_t*  this, EELSAddr page){
+#ifdef EELS_PAGE_SIZE
+    enum { page_2pwr = LOG2_CEIL(EELS_PAGE_SIZE) , };
+    return this->page_records *  ( (page - this->begining) >> page_2pwr );
+#else
+    return this->page_records *  ( (page - this->begining) >> this->page_2pwr );
+#endif
 }
 
 
@@ -446,9 +551,10 @@ EELSAddr _EELS_FindLastPos(EELSh slotNumber) {
 
 	this->epoch_counter = epoch;
 
-	EELSlotLen tmp_cnt;
-
 	EELSlotLen cnt = 0;
+
+#if 0
+	// search by linear records scan
 	for (EELSPosition i= eels_next_pos(this, pos)
 	        ; pos < i
 	        ; pos = i, i= eels_next_pos(this, pos), ++cnt
@@ -459,6 +565,81 @@ EELSAddr _EELS_FindLastPos(EELSh slotNumber) {
         if (tmp_cnt != epoch) // if (current = previous )
             break;
 	}
+
+#else
+    // search by binary scan
+    EELSPosition    hipos = eels_pred_pos(this, pos);
+
+    if (this->page_records > 0){
+	    // binary search over pageX.[0] elements
+	    EELSAddr        lp = eels_pos_page(this, pos);
+	    EELSAddr        hp = eels_pos_page(this, hipos);
+	    EELSAddr        xp = hp;
+
+	    while ( lp != xp){
+	        EELSPosition xpos = eels_pos(this, xp, this->page_offs);
+
+	        EELSEpoch xepoch =  _EELS_ReadCounter(slotNumber, xpos);
+	        if ( xepoch == epoch){
+	            lp = xp;
+	        }
+	        else {
+	            hp = xp;
+	        }
+	        if ( (hp-lp) > this->page_size )
+	            xp = lp + eels_pos_page(this, (hp-lp)/2 );
+	        else
+	            break;
+	    }
+	    cnt = eels_page_idx(this, lp);
+
+        xp = this->page_offs;
+	    if (this->page_records > 1){
+	        // binary search in page
+	        unsigned li = 0;
+	        unsigned hi = this->page_records-1;
+	        unsigned xi = hi;
+
+	        while(li != xi){
+	            EELSPosition xpos = this->page_offs + this->slot_log_length * xi;
+	            xpos = eels_pos(this, lp, xpos);
+
+	            EELSEpoch xepoch =  _EELS_ReadCounter(slotNumber, xpos);
+	            if ( xepoch == epoch){
+	                li = xi;
+	            }
+	            else {
+	                hi = xi;
+	            }
+                xi = li + (hi-li)/2;
+	        }
+
+	        xp = this->page_offs + this->slot_log_length * xi;
+	        cnt += xi;
+	    }
+
+	    pos = eels_pos(this, lp, xp);
+    }
+    else {
+        EELSlotLen      hi = this->_counter_max-1;
+        EELSlotLen      xi = hi;
+
+        while (cnt != xi){
+            EELSPosition xpos = eels_index_pos(this, xi);
+
+            EELSEpoch xepoch =  _EELS_ReadCounter(slotNumber, xpos);
+            if ( xepoch == epoch){
+                cnt = xi;
+            }
+            else {
+                hi = xi;
+            }
+            xi = cnt + (hi-cnt)/2;
+        }
+        pos = eels_index_pos(this, cnt);
+    }
+
+#endif
 
 	this->write_position    = pos;
     this->current_counter   = cnt;

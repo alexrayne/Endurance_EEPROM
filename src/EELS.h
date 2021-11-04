@@ -127,10 +127,11 @@ typedef struct {
     // page layout
 #ifndef EELS_PAGE_SIZE
     EELSlotSize page_size;
+    uint8_t     page_2pwr;
 #endif
+    uint8_t     page_records;
     EELSPageLen page_offs;
     EELSPageLen page_limit;
-    uint8_t     page_records;
 
 }EELSlot_t;
 
