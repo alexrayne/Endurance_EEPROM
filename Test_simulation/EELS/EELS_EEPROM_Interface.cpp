@@ -29,16 +29,16 @@ EELS_EEPROM_Interface::~EELS_EEPROM_Interface()
 }
 */
 
-uint32_t _eeprom_obj_write(uint16_t address, const uint8_t* buff, int32_t length){
+uint32_t _eeprom_obj_write(uint16_t address, const void* buff, int32_t length){
     if (eels_eeprom::_eeprom_obj)
-        return eels_eeprom::_eeprom_obj->eeprom_write(address, buff, length);
+        return eels_eeprom::_eeprom_obj->eeprom_write(address, (const uint8_t*)buff, length);
     else
         return ~0u;
 }
 
-uint32_t _eeprom_obj_read(uint16_t address, uint8_t* buff, uint16_t length){
+uint32_t _eeprom_obj_read(uint16_t address, void* buff, uint16_t length){
     if (eels_eeprom::_eeprom_obj)
-        return eels_eeprom::_eeprom_obj->eeprom_read(address, buff, length);
+        return eels_eeprom::_eeprom_obj->eeprom_read(address, (uint8_t*)buff, length);
     else
         return ~0u;
 }
