@@ -114,6 +114,13 @@ int eels_log2ceil(unsigned x){
 EELSEpoch _EELS_ReadCounter(EELSh slotNumber, uint32_t addr);
 static EELSAddr    eels_pos_page(EELSlot_t*  this, EELSPosition x);
 
+
+
+#ifndef EELS_PAGE_SIZE
+static  EELSlotSize __page_size(EELSlot_t*  this) {return this->page_size;}
+#else
+#define __page_size(this)    EELS_PAGE_SIZE
+#endif
 /* ==================================================================== */
 /* 						PUBLIC FUNCTIONS 								*/
 /* ==================================================================== */
@@ -126,7 +133,9 @@ void EELS_Init(){
         this->_counter_max      = 0;
         this->current_counter   = 0;
         this->slot_log_length   = 0;
+#ifndef EELS_PAGE_SIZE
         this->page_size         = 0;
+#endif
         this->page_offs         = 0;
         this->page_limit        = 0;
         EELS_RESET();
@@ -159,12 +168,11 @@ EELSError EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, u
     /*Slot datalength*/
     this->slot_log_length = data_length + EELS_RECOFFS_DATA;
 
+    unsigned page_size = __page_size(this);
 #ifndef EELS_PAGE_SIZE
-    unsigned page_size = this->page_size;
     unsigned page_2pwr = this->page_2pwr;
 #else
     enum {
-        page_size = EELS_PAGE_SIZE,
         page_2pwr = EELS_LOG2_CEIL(EELS_PAGE_SIZE),
     };
 #endif
@@ -235,8 +243,6 @@ EELSError EELS_PageAlign  (EELSh slotNumber, EELSlotLen page_size){
 #ifndef EELS_PAGE_SIZE
     this->page_size     = page_size;
     this->page_2pwr     = eels_log2ceil(page_size);
-#else
-    enum ( page_size  = EELS_PAGE_SIZE, };
 #endif
     this->page_offs     = 0;
     this->page_limit    = (EELSPageLen)page_size;
@@ -251,7 +257,7 @@ EELSError EELS_PageSection(EELSh slotNumber, EELSPageLen page_offs, EELSPageLen 
 
     EELSlot_t*  this = EELSlot(slotNumber);
 
-    if ( (page_offs + sec_size) > this->page_size)
+    if ( (page_offs + sec_size) > __page_size(this))
         return  EELS_ERROR_SMALLPAGE;
 
     this->page_offs     = page_offs;
@@ -310,7 +316,7 @@ EELSAddr    eels_index_pos(EELSlot_t*  this, unsigned idx){
     }
     else {
         unsigned pages = idx / this->page_records;
-        EELSAddr page = this->begining + this->page_size * pages;
+        EELSAddr page = this->begining + __page_size(this) * pages;
 
         EELSAddr ofs  = this->page_offs;
         if (this->page_records > 1){
@@ -344,7 +350,7 @@ EELSAddr    eels_relative_pos(EELSlot_t*  this, int idx){
 
 static
 EELSPosition    eels_next_pos(EELSlot_t*  this, EELSPosition x){
-    if (this->page_size <= 0) {
+    if (__page_size(this) <= 0) {
         x += this->slot_log_length;
         if (x >= (this->begining + this->length) )
             x = this->begining;
@@ -354,16 +360,18 @@ EELSPosition    eels_next_pos(EELSlot_t*  this, EELSPosition x){
     EELSAddr page   = eels_pos_page(this, x);
     EELSAddr ofs    = eels_pos_ofs(this, x);
 
-    EELSlotSize page_limit = this->page_size;
+    EELSlotSize page_limit;
     if (this->page_limit > 0)
         page_limit = this->page_limit;
+    else
+        page_limit = __page_size(this);
 
     ofs += this->slot_log_length;
     if ( (ofs + this->slot_log_length) > page_limit){
         ofs = this->page_offs;
-        page += this->page_size;
+        page += __page_size(this);
 
-        if ( (page + this->page_size) > (this->begining + this->length) )
+        if ( (page + __page_size(this)) > (this->begining + this->length) )
             page = this->begining;
     }
     return eels_pos(this, page, ofs);
@@ -371,7 +379,7 @@ EELSPosition    eels_next_pos(EELSlot_t*  this, EELSPosition x){
 
 static
 EELSPosition    eels_pred_pos(EELSlot_t*  this, EELSPosition x){
-    if (this->page_size <= 0) {
+    if (__page_size(this) <= 0) {
         if (x < (this->begining + this->slot_log_length) ){
             x = this->begining;
             x += this->slot_log_length * this->_counter_max; //(this->length);
@@ -389,17 +397,19 @@ EELSPosition    eels_pred_pos(EELSlot_t*  this, EELSPosition x){
     }
     else {
 
-        EELSlotSize page_limit = this->page_size;
+        EELSlotSize page_limit;
         if (this->page_limit > 0)
             page_limit = this->page_limit;
+        else
+            page_limit = __page_size(this);
 
         ofs = page_limit - this->slot_log_length;
 
-        if (page < (this->begining + this->page_size) ) {
+        if (page < (this->begining + __page_size(this)) ) {
             page = (this->begining + this->length);
         }
 
-        page -= this->page_size;
+        page -= __page_size(this);
     }
     return eels_pos(this, page, ofs);
 }
@@ -703,7 +713,7 @@ EELSAddr _EELS_FindLastPos(EELSh slotNumber) {
 	        else {
 	            hp = xp;
 	        }
-	        if ( (hp-lp) > this->page_size )
+	        if ( (hp-lp) > __page_size(this) )
 	            xp = lp + eels_pos_page(this, (hp-lp)/2 );
 	        else
 	            break;
