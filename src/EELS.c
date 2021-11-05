@@ -790,7 +790,8 @@ uint16_t _EELS_getHealthyLogs(EELSh slotNumber){
             ; p = i, i= eels_next_pos(this, p)
             )
 	{
-			if ( _EELS_ReadLog(slotNumber, i, buf) )
+        EELSError ok = _EELS_ReadLog(slotNumber, i, buf);
+			if ( ok == EELS_ERROR_OK )
 				healthyLogs++;
 			else
 				curroptedLogs++;

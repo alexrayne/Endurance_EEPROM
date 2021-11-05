@@ -72,6 +72,7 @@ enum EELSErrorID{
     EELS_ERROR_WAIT         = 0,
 
 #ifdef _EELS_ERROR_OK
+    EELS_ERROR_OK           = _EELS_ERROR_OK,
 #else
     EELS_ERROR_OK           = 1,
 #endif
