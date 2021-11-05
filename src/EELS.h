@@ -125,6 +125,17 @@ EELSError EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize le
 
 //================================================================================================
 
+/// @brief before start  EELS_InsertXXX, EELS_ReadXXX need wait that EELS slot not busy by concurent operation
+
+#ifdef EELS_PT_DECL
+EELSError EELS_Ready(EELSh slotNumber);
+#else
+/// if no proto-threads concurence used, no need waitings
+#define EELS_Ready(...) EELS_ERROR_OK
+#endif
+
+
+
 EELSError EELS_InsertLog  (EELSh slotNumber, const void* data);
 
 /// @brief write eels-record content.
