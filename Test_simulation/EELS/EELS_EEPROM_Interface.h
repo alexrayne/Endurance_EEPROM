@@ -38,8 +38,8 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-uint32_t _eeprom_obj_write(uint16_t address, const void* buff, int32_t length);
-uint32_t _eeprom_obj_read(uint16_t address, void* buff, uint16_t length);
+uint32_t _eeprom_obj_write(uint16_t address, const uint8_t* buff, int32_t length);
+uint32_t _eeprom_obj_read(uint16_t address, uint8_t* buff, uint16_t length);
 
 #ifdef __cplusplus
 }

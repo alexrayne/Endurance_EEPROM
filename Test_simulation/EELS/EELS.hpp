@@ -29,6 +29,7 @@ private:
 	//functions
 public:
 	EELS(Twi* pTWI, uint8_t addr,uint8_t slots);
+	void CleanLog(uint8_t slotNumber);
 	void InsertLog(uint8_t slotNumber, uint8_t* data);
 	uint8_t SetSlot(uint8_t slotNumber, uint16_t begin_addr, uint16_t length, uint8_t data_length);
     EELSError PageAlign(EELSh slotNumber, EELSlotLen page_size);

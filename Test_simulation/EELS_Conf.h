@@ -8,8 +8,8 @@
 #include "EELS/EELS_EEPROM_Interface.h"
 
 /* DEFINE EEPROM FUNCTIONS HERE: */
-#define EELS_EEPROM_READ(addr,buf,length)   _eeprom_obj_read(addr, buf, length)
-#define EELS_EEPROM_WRITE(addr,buf,length)  _eeprom_obj_write(addr,buf,length)
+#define EELS_EEPROM_READ(addr,buf,length)   _eeprom_obj_read(addr, (uint8_t*)buf, length)
+#define EELS_EEPROM_WRITE(addr,buf,length)  _eeprom_obj_write(addr, (uint8_t*)buf,length)
 
 /* how many slots are used in your application: */
 #define EELS_APP_SLOTS 5

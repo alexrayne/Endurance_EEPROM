@@ -50,7 +50,7 @@ uint16_t EELS::GetLogPos(uint8_t slotNumber) {
 	return (*this)[slotNumber].write_position;
 }
 uint16_t EELS::GetCounter(uint8_t slotNumber) {
-	return (*this)[slotNumber].current_counter;
+	return (*this)[slotNumber].write_index;
 }
 
 uint16_t EELS::GetLogSize(uint8_t slotNumber) {
@@ -67,6 +67,10 @@ uint16_t EELS::PageSize(uint8_t slotNumber){
 
 void EELS::InsertLog(uint8_t slotNumber, uint8_t* data) {
     EELS_InsertLog(slotNumber, data);
+}
+
+void EELS::CleanLog(uint8_t slotNumber) {
+	EELS_CleanLog(slotNumber);
 }
 
 // default destructor
