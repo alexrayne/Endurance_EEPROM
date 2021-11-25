@@ -163,7 +163,7 @@ EELSError       EELS_ReadFromHead    (EELSh slotNumber, int log_num , void* cons
 
 /// @param log_num >= 0 - index from tail
 ///                < 0  - index from head
-#define EELS_ReadFromEnd( h, tail_idx , buf ) EELS_ReadHead(h, -(tail_idx), buf)
+#define EELS_ReadFromEnd( h, tail_idx , buf ) EELS_ReadFromHead(h, -((int)(tail_idx)), buf)
 
 EELSError       EELS_ReadLast   (EELSh slotNumber, void* const buf);
 
