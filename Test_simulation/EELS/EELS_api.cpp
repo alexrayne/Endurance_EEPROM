@@ -46,6 +46,19 @@ EELS::ee_slot_t& EELS::operator[](uint8_t i) {
 }
 
 
+EELSError EELS::rec_idx(EELSh slotNumber, unsigned rec_idx, void* const buf) {
+	return EELS_ReadIdx(slotNumber, rec_idx, buf);
+}
+
+EELSError EELS::rec_tail(EELSh slotNumber, unsigned rec_idx, void* const buf) {
+	return EELS_ReadFromEnd(slotNumber, rec_idx, buf);
+}
+
+EELSError EELS::rec_last(EELSh slotNumber, void* const buf) {
+	return EELS_ReadLast(slotNumber, buf);
+}
+
+
 uint16_t EELS::GetLogPos(uint8_t slotNumber) {
 	return (*this)[slotNumber].write_position;
 }

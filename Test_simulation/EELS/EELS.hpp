@@ -35,6 +35,10 @@ public:
     EELSError PageAlign(EELSh slotNumber, EELSlotLen page_size);
     EELSError PageSection(EELSh slotNumber, EELSPageLen page_offs, EELSPageLen sec_size);
 
+	EELSError rec_idx(EELSh slotNumber,  unsigned rec_idx, void* const buf);
+	EELSError rec_tail(EELSh slotNumber, unsigned rec_idx, void* const buf);
+	EELSError rec_last(EELSh slotNumber, void* const buf);
+
 	uint16_t GetLogPos(uint8_t slotNumber);
 	uint16_t GetCounter(uint8_t slotNumber);
 	uint16_t GetLogSize(uint8_t slotNumber);
