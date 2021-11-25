@@ -8,6 +8,16 @@
 #include "EELS.h"
 
 
+
+/* ==================================================================== */
+
+#if 1
+#include <assert.h>
+#define ASSERT(...) assert(__VA_ARGS__)
+#else
+#define ASSERT(...)
+#endif
+
 /* ==================================================================== */
 
 EELSlot_t EELslot_arr[EELS_APP_SLOTS];
@@ -24,13 +34,20 @@ EELSlot_t EELslot_arr[EELS_APP_SLOTS];
 
 //  @args pt
 #define EELS_RESET()    PT_INIT( &(this->pt) )
-#define EELS_BEGIN()    PT_BEGIN(pt);
-#define EELS_END()      PT_END(pt);
-#define EELS_RESULT(x)  PT_INIT(pt); return x
+#define EELS_BEGIN()    PT_BEGIN(pt)
+#define EELS_END()      PT_END(pt)
+#ifndef PT_RESULT
+#define EELS_RESULT(x)    do {                  \
+                            PT_INIT(pt);        \
+                            return x;           \
+                          } while(0)
+#else
+#define EELS_RESULT(x)  PT_RESULT( pt, x)
+#endif
 #define EELS_READY()    PT_IS_NULL(pt)
 
 //  @args pt, ok
-#define EELS_WAIT( statemt ) PT_WAIT_WHILE(pt, EELS_SCHEDULE( (ok = (statemt), ok) ) )
+#define EELS_WAIT( ok, statemt ) PT_WAIT_WHILE(pt, EELS_SCHEDULE( (ok = (statemt), ok) ) )
 
 #else
 
@@ -43,7 +60,7 @@ EELSlot_t EELslot_arr[EELS_APP_SLOTS];
 #define EELS_RESULT(x)  return x
 
 //  @args ok
-#define EELS_WAIT( statemt ) ok = statemt
+#define EELS_WAIT( ok, statemt ) ok = statemt
 
 #endif
 
@@ -56,6 +73,15 @@ EELSlot_t EELslot_arr[EELS_APP_SLOTS];
 
 #ifndef EELS_RELEASE
 #define EELS_RELEASE(slotid)  // here need notify other threads about slot released from work
+#endif
+
+/// @brief характер операции чтения - блокирующая/неблокирующая
+#ifndef EELS_EEPROM_READ_NOBLOKING
+#define EELS_EEPROM_READ_NOBLOKING  0
+#endif
+
+#ifndef EELS_EEPROM_WRITE_NOBLOKING
+#define EELS_EEPROM_WRITE_NOBLOKING  0
 #endif
 
 /* ==================================================================== */
@@ -134,7 +160,7 @@ void EELS_Init(){
         EELSlot_t*  this = EELslot_arr + h;
         this->length            = 0;
         this->_counter_max      = 0;
-        this->current_counter   = 0;
+        this->write_index   = 0;
         this->slot_log_length   = 0;
 #ifndef EELS_PAGE_SIZE
         this->page_size         = 0;
@@ -154,8 +180,13 @@ enum {
 
     EELS_RECOFFS_DATA   = EELS_RECSIZE_HEAD,
 
-    EELS_EPOCH_NONE     = 0xff,
+    EELS_EPOCH_NONE     = 0x80,
     EELS_EPOCH_MAX      = EELS_EPOCH_NONE-1,
+
+    // this epoch use for fresh log - when log no cycled over top-limit
+    EELS_EPOCH0         = 0,
+
+    EELS_EPOCH1         = 0,    // this epoch after epoch-count overloads
 };
 
 EELSError EELS_SetSlot(EELSh slotNumber, EELSAddr begin_addr, uint16_t length, uint8_t data_length) {
@@ -331,23 +362,42 @@ EELSAddr    eels_index_pos(EELSlot_t*  this, unsigned idx){
     }
 }
 
+static bool eels_overlaped(EELSlot_t*  this) {return this->overlaped;}
+
 static
 EELSAddr    eels_relative_pos(EELSlot_t*  this, int idx){
-    if ( idx >= this->_counter_max ) {
-        return -1;  //tail
-    }
-    else if ( -idx >= this->_counter_max ) {
-        return 0;   //head
-    }
-    // TODO: check actual slot fill size
+    if ( eels_overlaped(this) ) {
+        // log is cycled over top
 
-    unsigned now_counter = this->current_counter;
-    idx += now_counter;
-    if (idx >= this->_counter_max)
-        idx -= this->_counter_max;
-    else if (idx < 0)
-        idx += this->_counter_max;
+        if ( idx >= this->_counter_max ) {
+            return -1;  //tail
+        }
+        else if ( -idx >= this->_counter_max ) {
+            return 0;   //head
+        }
 
+        unsigned now_counter = this->write_index;
+        idx += now_counter;
+        if (idx >= this->_counter_max)
+            idx -= this->_counter_max;
+        else if (idx < 0)
+            idx += this->_counter_max;
+
+    }
+    else {
+        // fresh log have records [0 ... write_index]
+        int now_counter = this->write_index;
+
+        if ( idx >= now_counter ) {
+            return -1;  //tail
+        }
+        else if ( -idx >= now_counter ) {
+            return 0;   //head
+        }
+
+        if ( idx < 0 )
+            idx += now_counter;
+    }
     return  eels_index_pos(this, idx);
 }
 
@@ -423,16 +473,14 @@ EELSPosition    eels_pred_pos(EELSlot_t*  this, EELSPosition x){
 
 #ifndef EELS_Ready
 
-static
-EELSError _EELS_Ready(EELSlot_t*  this){
+EELSError EELS_Ready(EELSh slotNumber)
+{
+    EELSlot_t* this = EELSlot(slotNumber);
     EELS_PT
-    if ( EELS_READY() )
-        return EELS_ERROR_OK;
-    return  EELS_ERROR_WAIT;
-}
 
-EELSError EELS_Ready(EELSh slotNumber){
-    return _EELS_Ready( EELSlot(slotNumber) );
+    if (EELS_READY())
+            return EELS_ERROR_OK;
+    return  EELS_ERROR_WAIT;
 }
 
 #endif
@@ -446,7 +494,7 @@ void eels_write_advance(EELSlot_t*  this){
 
     this->write_position = eels_next_pos(this, this->write_position);
 
-    EELSlotLen cnt = this->current_counter;
+    EELSlotLen cnt = this->write_index;
     if (mypos > this->write_position)
         cnt = 0;
     else
@@ -455,96 +503,104 @@ void eels_write_advance(EELSlot_t*  this){
     if (cnt >= this->_counter_max) {
         //if counter goes beyond counter max -> set back to 1
         cnt = 0;
-        this->write_position = eels_index_pos(this, 0);
+        mypos= eels_index_pos(this, 0);
+        this->write_position = mypos;
     }
 
-    this->current_counter = cnt;
+    if (cnt == 0){
+        this->overlaped      = true;
+        ++this->epoch_counter;
+        if (this->epoch_counter >= EELS_EPOCH_NONE)
+            this->epoch_counter = EELS_EPOCH1;
+    }
+
+    this->write_index = cnt;
 }
 
-EELSIndex __EELS_InsertLog(EELSlot_t*  this, const void* src, EELSRecHead* head) {
-
-	#if (__EELS_DBG__)
-	_EELS_FindLastPos(slotNumber);
-	#endif
-
+EELSError __EELS_InsertLog(EELSlot_t*  this, const void* src, EELSRecHead* head) {
     int ok;
     EELS_PT;
 
     EELS_BEGIN();
 
-    EELS_WAIT( EELS_EEPROM_WAIT() );
+#if (__EELS_DBG__)
+    _EELS_FindLastPos(slotNumber);
+#endif
+
+    EELS_WAIT( ok, EELS_EEPROM_WAIT() );
     if (ok < 0)
         EELS_RESULT(ok);
 
     {
-    EELSlotLen cnt    = this->current_counter;
+    EELSlotLen cnt    = this->write_index;
     if (cnt >= this->_counter_max)
     //if (mypos > this->write_position)
     {
         // position wraped over slot length
         cnt = 0;
-        this->current_counter = 0;
+        this->write_index = 0;
         this->write_position = eels_index_pos(this, 0);
-    }
-    EELSPosition mypos= this->write_position;
-
-    if (cnt == 0){
-        this->epoch_counter = _EELS_ReadCounter(this, mypos);
-        ++this->epoch_counter;
-        if (this->epoch_counter >= EELS_EPOCH_NONE)
-            this->epoch_counter = 0;
     }
 
     }
 
     /*=== LETS DO A WRITE ===*/
     if (head == NULL)
-        head = &this->head;
-	head->raw[0] = this->epoch_counter;
-	head->raw[1] = EELS_CRC8(src, this->raw_data_size);
+        head = &(this->head);
+
+    head->raw[EELS_RECOFFS_EPOCH]   = this->epoch_counter;
+	head->raw[EELS_RECOFFS_CRC]     = EELS_CRC8(src, this->raw_data_size);
 
 	if (head == src){
 	    // provided contigous record for write
-	    ok = EELS_EEPROM_WRITE( this->write_position, src, this->slot_log_length);
+	    EELS_WAIT( ok, EELS_EEPROM_WRITE( this->write_position, src, this->slot_log_length) );
 	    if (ok < 0)
 	        EELS_RESULT(ok);
 	}
 	else {
 
-        ok = EELS_EEPROM_WRITE( this->write_position + EELS_RECOFFS_DATA , src, this->raw_data_size);
+	    EELS_WAIT( ok, EELS_EEPROM_WRITE( this->write_position + EELS_RECOFFS_DATA , src, this->raw_data_size) );
         if (ok < 0)
             EELS_RESULT(ok);
 
-        EELS_WAIT( EELS_EEPROM_WAIT() );
+#if EELS_EEPROM_WRITE_NOBLOKING
+        EELS_WAIT( ok, EELS_EEPROM_WAIT() );
         if (ok < 0)
             EELS_RESULT(ok);
+#endif
 
         // complete record, by write it`s head
-        ok = EELS_EEPROM_WRITE( this->write_position, head, EELS_RECSIZE_HEAD );
+        EELS_WAIT( ok, EELS_EEPROM_WRITE( this->write_position, head, EELS_RECSIZE_HEAD ) );
         if (ok < 0)
             EELS_RESULT(ok);
 
 	}
 
+#if EELS_EEPROM_WRITE_NOBLOKING
+    EELS_WAIT( ok, EELS_EEPROM_WAIT() );
+    if (ok < 0)
+        EELS_RESULT(ok);
+#endif
+
 	#if (__EELS_DBG__)
-		_EELS_FindLastPos(slotNumber);
+	    _EELS_FindLastPos(slotNumber);
 	#else
 		eels_write_advance(this);
 	#endif
 
-    EELS_RESULT(this->current_counter);
+    EELS_RESULT(ok);
 	EELS_END();
 }
 
 static
-EELSIndex _EELS_InsertLog(EELSh slotNumber, const void* src, EELSRecHead* head){
+EELSError _EELS_InsertLog(EELSh slotNumber, const void* src, EELSRecHead* head){
     EELSlot_t*  this = EELSlot(slotNumber);
 
-    bool locked = _EELS_Ready(this);
+    bool nolocked = EELS_Ready(slotNumber);
 
-    EELSIndex ok = __EELS_InsertLog(this, src, head);
+    EELSError ok = __EELS_InsertLog(this, src, head);
 
-    if ( _EELS_Ready(this) && !locked ) // maybe should release always?
+    if ( !nolocked && EELS_Ready(slotNumber) ) // maybe should release always?
         // slot was busy and have finished op.
         EELS_RELEASE(slotNumber);
 
@@ -563,6 +619,71 @@ EELSIndex EELS_InsertLog(EELSh slotNumber, const void* src){
 
 
 
+//===================================================================================================================
+EELSError EELS_CleanLog  (EELSh slotNumber){
+    EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
+
+    int ok;
+    EELSPosition pos0;
+    EELSEpoch epoch;
+
+    EELS_PT;
+
+    EELS_BEGIN();
+
+    EELS_WAIT( ok, EELS_EEPROM_WAIT() );
+    if (ok < 0)
+        EELS_RESULT(ok);
+
+    pos0 = eels_index_pos(this, 0);
+
+    epoch = _EELS_ReadCounter(this, pos0);   //current counter and position is SLOT_BEGIN
+    if ( (epoch & EELS_EPOCH_NONE) != 0 ){
+        this->write_position    = pos0;
+        this->write_index   = 0;
+        this->overlaped         = false;
+        this->epoch_counter     = (epoch & ~EELS_EPOCH_NONE) + 1;
+        EELS_RESULT(EELS_ERROR_OK);
+    }
+
+    if ( this->write_position == pos0 ){
+        // already writes to [0]
+        epoch = this->epoch_counter;
+        if (this->overlaped) {
+            ++this->epoch_counter;
+        }
+    }
+    else {
+        this->write_position    = pos0;
+        this->write_index   = 0;
+        this->epoch_counter     = epoch+1;
+    }
+    if (this->epoch_counter >= EELS_EPOCH_MAX)
+        this->epoch_counter = EELS_EPOCH1;
+    this->overlaped         = false;
+
+    // break 1st log record as empty
+    epoch = epoch | EELS_EPOCH_NONE;
+    this->head.raw[0] = epoch;
+    this->head.raw[1] = 0xff;
+
+    // complete record, by write it`s head
+    EELS_WAIT( ok, EELS_EEPROM_WRITE( this->write_position, &this->head, EELS_RECSIZE_HEAD ) );
+
+#if EELS_EEPROM_WRITE_NOBLOKING
+    EELS_WAIT( ok, EELS_EEPROM_WAIT() );
+    if (ok < 0)
+        EELS_RESULT(ok);
+#endif
+
+    EELS_RESULT(ok);
+
+    EELS_END();
+}
+
+
+
+//===================================================================================================================
 EELSError EELS_ReadLast(EELSh slotNumber, void* const buf){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 	#if (__EELS_DBG__)
@@ -576,44 +697,49 @@ EELSError EELS_ReadLast(EELSh slotNumber, void* const buf){
 }
 
 
+unsigned  EELS_Len    (EELSh slotNumber){
+    EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
+    if ( eels_overlaped(this) )
+        return this->_counter_max;
+    else
+        return this->write_index;
+}
 
 EELSPosition    EELS_PosIdx (EELSh slotNumber, int idx){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
     return eels_relative_pos(this, idx);
 }
 
+
 EELSPosition    EELS_PosNext(EELSh slotNumber, EELSPosition from){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
     return eels_next_pos(this, from);
 }
 
-EELSError            EELS_ReadPos(EELSh slotNumber, EELSPosition at , void* const buf ){
+EELSError EELS_ReadPos(EELSh slotNumber, EELSPosition at , void* const buf ){
     return _EELS_ReadLog(slotNumber, at, buf);
+}
+
+EELSError EELS_ReadIdx(EELSh slotNumber, unsigned rec_idx , void* const buf ){
+    return _EELS_ReadLog(slotNumber, EELS_PosIdx(slotNumber, rec_idx), buf);
 }
 
 
 
-EELSError    EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const dst){
+EELSError    EELS_ReadFromHead    (EELSh slotNumber, int log_num , void* const dst){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
-    uint32_t log_num_pos = 0;
-    EELS_PT;
-
-    if (EELS_READY()) {
-    if ( log_num >= this->_counter_max ) {
-        return false;  //tail
-    }
-    else if ( -log_num >= this->_counter_max ) {
-        return false;   //head
-    }
+    int32_t log_num_pos = 0;
 
     #if (__EELS_DBG__)
     _EELS_FindLastPos(slotNumber);
     #endif
 
     log_num_pos = eels_relative_pos(this, log_num);
-    }
 
-    return _EELS_ReadLog(slotNumber, log_num_pos, dst);
+    if (log_num_pos < 0 ) //(this->begining)
+        return _EELS_ReadLog(slotNumber, log_num_pos, dst);
+    else
+        return EELS_ERROR_NOSLOT;
 }
 
 
@@ -641,7 +767,6 @@ uint8_t EELS_crc8(const void *src, EELSDataLen len)
 }
 
 
-
 EELSError __EELS_ReadLog(EELSlot_t*  this, EELSAddr log_start_position, void* const dst){
     EELS_PT;
     uint8_t* buf = (uint8_t*)dst;
@@ -649,20 +774,24 @@ EELSError __EELS_ReadLog(EELSlot_t*  this, EELSAddr log_start_position, void* co
 
     EELS_BEGIN();
 
-    EELS_WAIT( EELS_EEPROM_WAIT() );
+    ASSERT( (log_start_position >= this->begining)
+            && ((log_start_position - this->begining) < this->length)
+          );
+
+    EELS_WAIT( ok, EELS_EEPROM_WAIT() );
     if (ok < 0)
         EELS_RESULT(ok);
 
-    ok = EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_DATA ,
-							buf, this->raw_data_size );
+    EELS_WAIT( ok, EELS_EEPROM_READ(log_start_position + EELS_RECOFFS_DATA ,
+							buf, this->raw_data_size ) );
     if (ok < 0)
         EELS_RESULT(ok);
 
-    if ( EELS_SCHEDULE(ok) )
-        EELS_WAIT( EELS_EEPROM_WAIT() );
-
+#if EELS_EEPROM_READ_NOBLOKING
+    EELS_WAIT( ok, EELS_EEPROM_WAIT() );
     if (ok < 0)
         EELS_RESULT(ok);
+#endif
 
 	{
 	    uint8_t* slotcrc = this->head.raw ;
@@ -684,11 +813,11 @@ EELSError __EELS_ReadLog(EELSlot_t*  this, EELSAddr log_start_position, void* co
 
 EELSError _EELS_ReadLog(EELSh slotNumber, EELSAddr log_start_position, void* const dst){
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
-    bool locked = _EELS_Ready(this);
+    bool nolocked = EELS_Ready(slotNumber);
 
     EELSIndex ok = __EELS_ReadLog(this, log_start_position, dst);
 
-    if ( _EELS_Ready(this) && !locked ) // maybe should release always?
+    if ( EELS_Ready(slotNumber) && !nolocked ) // maybe should release always?
         // slot was busy and have finished op.
         EELS_RELEASE(slotNumber);
 
@@ -710,20 +839,26 @@ EELSEpoch _EELS_ReadCounter(EELSlot_t*  this, EELSAddr addr) {
 EELSAddr _EELS_FindLastPos(EELSh slotNumber) {
     EELSlot_t*  this = EELSlot(slotNumber);     (void)this;
 
-	EELSPosition pos = eels_index_pos(this, 0);
+    EELSPosition pos = eels_index_pos(this, 0);
 	EELSEpoch epoch = _EELS_ReadCounter(this, pos);   //current counter and position is SLOT_BEGIN
 
 	//usually erased eeproms have [255] in their cells?
-	if (epoch >= EELS_EPOCH_NONE) {
-	    //if counter is invalid (bigger than max) - looks slot empty
-	    epoch = 0; //reset cnt so if next counter=1 it will be set ..
-		this->epoch_counter     = 0;
+	if (( epoch & EELS_EPOCH_NONE) ) {
+	    //if counter is invalid (bigger than max) - looks 1slot empty, and need start new epoch
+	    epoch = (epoch & ~EELS_EPOCH_NONE) +1; //reset cnt so if next counter=1 it will be set ..
+        if (epoch >= EELS_EPOCH_MAX)
+            epoch = EELS_EPOCH1;
+        
+        this->overlaped         = false;
+		this->epoch_counter     = epoch;
 	    this->write_position    = pos;
-	    this->current_counter   = 0;
-		return pos;
+	    this->write_index   = 0;
+	    return pos;
 	}
 
 	this->epoch_counter = epoch;
+
+    EELSPosition    hipos = eels_pred_pos(this, pos);
 
 	EELSlotLen cnt = 0;
 
@@ -741,8 +876,8 @@ EELSAddr _EELS_FindLastPos(EELSh slotNumber) {
 	}
 
 #else
-    // search by binary scan
-    EELSPosition    hipos = eels_pred_pos(this, pos);
+
+	// search by binary scan
 
     if (this->page_records > 0){
 	    // binary search over pageX.[0] elements
@@ -816,10 +951,20 @@ EELSAddr _EELS_FindLastPos(EELSh slotNumber) {
 #endif
 
 	this->write_position    = pos;
-    this->current_counter   = cnt;
+    this->write_index   = cnt;
+
+    //check that last written record is valid, if no - write from that one, else continue after that
+
     eels_write_advance(this);
 
-    return cnt; //this->current_counter;
+    EELSEpoch hi_epoch = _EELS_ReadCounter(this, hipos);   //current counter and position is SLOT_BEGIN
+    EELSEpoch last_epoch = _EELS_ReadCounter(this, this->write_position);   //current counter and position is SLOT_BEGIN
+
+    // if record at write same epoch as topmost, assume buffer opverlaped
+    this->overlaped         = (hi_epoch == last_epoch);
+
+
+    return pos;
 }
 
 uint16_t _EELS_getHealthyLogs(EELSh slotNumber){

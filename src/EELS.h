@@ -60,7 +60,7 @@ enum {
 };
 
 struct EELSRecHead {
-    char    raw[EELS_RECSIZE_HEAD];
+    uint8_t    raw[EELS_RECSIZE_HEAD];
 };
 typedef struct EELSRecHead EELSRecHead;
 
@@ -124,7 +124,6 @@ EELSError EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize le
 
 
 //================================================================================================
-
 /// @brief before start  EELS_InsertXXX, EELS_ReadXXX need wait that EELS slot not busy by concurent operation
 
 #ifdef EELS_PT_DECL
@@ -135,6 +134,8 @@ EELSError EELS_Ready(EELSh slotNumber);
 #endif
 
 
+
+EELSError EELS_CleanLog(EELSh slotNumber);
 
 EELSError EELS_InsertLog  (EELSh slotNumber, const void* data);
 
@@ -151,16 +152,18 @@ typedef EELSAddr    EELSPosition;
 
 EELSPosition    EELS_PosIdx (EELSh slotNumber, int idx);
 EELSPosition    EELS_PosNext(EELSh slotNumber, EELSPosition from);
+unsigned        EELS_Len    (EELSh slotNumber);
 
 EELSError       EELS_ReadPos(EELSh slotNumber, EELSPosition at , void* const buf );
+EELSError       EELS_ReadIdx(EELSh slotNumber, unsigned rec_idx , void* const buf );
 
 /// @param log_num >= 0 - index from head
 ///                < 0  - index from tail
-EELSError       EELS_ReadIdx    (EELSh slotNumber, int log_num , void* const buf );
+EELSError       EELS_ReadFromHead    (EELSh slotNumber, int log_num , void* const buf );
 
 /// @param log_num >= 0 - index from tail
 ///                < 0  - index from head
-#define EELS_ReadFromEnd( h, tail_idx , buf ) EELS_ReadIdx(h, -(tail_idx), buf)
+#define EELS_ReadFromEnd( h, tail_idx , buf ) EELS_ReadHead(h, -(tail_idx), buf)
 
 EELSError       EELS_ReadLast   (EELSh slotNumber, void* const buf);
 
@@ -176,10 +179,8 @@ typedef struct {
     EELSAddr    begining;
     EELSlotSize length;
 
-    EELSlotLen  current_counter;
+    EELSlotLen  write_index;
     EELSlotLen  _counter_max;
-
-    EELSEpoch epoch_counter;
 
     EELSDataLen slot_log_length;
     EELSDataLen raw_data_size;
@@ -195,6 +196,9 @@ typedef struct {
 
     // writing context
     EELSRecHead head;
+
+    EELSEpoch epoch_counter;
+    bool      overlaped;
 
 #ifdef EELS_PT_DECL
     EELS_PT_DECL;
