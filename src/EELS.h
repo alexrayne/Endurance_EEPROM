@@ -11,10 +11,10 @@
 
 
 
-#include <EELS_Conf.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
-#include <stdint.h>
+#include <EELS_Conf.h>
 
 
 
@@ -38,11 +38,12 @@ extern "C" {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-typedef uint8_t     EELSHandle;
+typedef int8_t      EELSHandle;
 typedef EELSHandle  EELSh;
+
 typedef uint32_t    EELSAddr;
-typedef uint16_t    EELSlotSize;
-typedef uint16_t    EELSlotLen;
+typedef uint32_t    EELSlotSize;    // [bytes]
+typedef uint16_t    EELSlotLen;     // [items count]
 typedef uint8_t     EELSDataLen;
 typedef uint8_t     EELSPageLen;
 
@@ -65,6 +66,8 @@ struct EELSRecHead {
 typedef struct EELSRecHead EELSRecHead;
 
 
+#define EELS_RECORD_SIZE(t)     (sizeof(EELSRecHead) + sizeof(t))
+
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 enum EELSErrorID{
@@ -86,6 +89,7 @@ enum EELSErrorID{
     EELS_ERROR_NOSLOT       = -1,
     // not supports if EELS_PageAlign try on pagesize < log record size
     EELS_ERROR_SMALLPAGE    = -2,
+    EELS_ERROR_OUTOFSLOT    = -3,
 
 };
 typedef int EELSError;
@@ -99,7 +103,7 @@ typedef int EELSError;
 #ifdef EELS_PT_DECL
 #define EELS_SCHEDULE(state)    ( (state) != EELS_ERROR_WAIT )
 #else
-#define EELS_SCHEDULE(state)    ((state), true)
+#define EELS_SCHEDULE(state)    ((void)(state), true)
 #endif
 #endif
 
@@ -114,12 +118,15 @@ void    EELS_Init();
 /// @brief provide aligning records on page boundary
 /// @return EELS_ERROR_SMALLPAGE - if pagesize < log record size
 /// @note resets page section to 0...page_size
-EELSError EELS_PageAlign  (EELSh slotNumber, EELSlotLen page_size);
+EELSError EELS_PageAlign  (EELSh slotNumber, EELSPageLen page_size);
 
 /// @brief provide room records in page section
 EELSError EELS_PageSection(EELSh slotNumber, EELSPageLen page_offs, EELSPageLen sec_size);
 
 EELSError EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize length, EELSDataLen data_length);
+
+/// @brief check that slot have inited, and can contain some records
+EELSError EELS_SlotOnline(EELSh slotNumber);
 
 
 
@@ -127,10 +134,10 @@ EELSError EELS_SetSlot    (EELSh slotNumber, EELSAddr begin_addr, EELSlotSize le
 /// @brief before start  EELS_InsertXXX, EELS_ReadXXX need wait that EELS slot not busy by concurent operation
 
 #ifdef EELS_PT_DECL
-EELSError EELS_Ready(EELSh slotNumber);
+bool EELS_Ready(EELSh slotNumber);
 #else
 /// if no proto-threads concurence used, no need waitings
-#define EELS_Ready(...) EELS_ERROR_OK
+#define EELS_Ready(...) true
 #endif
 
 
@@ -212,7 +219,7 @@ EELSlot_t*  EELSlot         (EELSh slotNumber){
     return EELslot_arr + slotNumber;
 };
 
-EELSAddr _EELS_FindLastPos  (EELSh slotNumber);
+EELSPosition _EELS_FindLastPos  (EELSh slotNumber);
 uint16_t _EELS_getHealthyLogs(EELSh slotNumber);
 uint16_t _EELS_getHealthySequence(EELSh slotNumber);
 EELSError   _EELS_ReadLog      (EELSh slotNumber, EELSAddr log_start_position, void* const buf);
@@ -230,6 +237,8 @@ EELSAddr    EELS_SlotEnd    (EELSh slotNumber);
 uint8_t     EELS_ReadCell   (EELSAddr position);
 void        EELS_WriteCell  (EELSAddr position, uint8_t val);
 
+/// @brief check all active slots vs intersection
+bool        EELS_validate_intersects(void);
 
 
 #ifdef __cplusplus
